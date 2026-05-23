@@ -3,7 +3,7 @@
 1. Verify `t4l-server` is installed.
 2. If the server is missing, ask the user before installing it with:
    ```bash
-   pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge
+   pipx install t4l-server
    ```
 3. Start the server if it is not running:
    ```bash
