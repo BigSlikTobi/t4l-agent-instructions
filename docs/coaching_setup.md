@@ -53,6 +53,26 @@ If the app exposes `memoryWiki`, ask the user to save the confirmed long-term
 goal and current block target as active memories, or continue using them as
 explicit chat context if the agent cannot write memories.
 
+## Persistent Agent Memory
+
+If the agent runtime supports persistent project memory, role memory, or a local
+file such as `SOUL.md`, write only a compact coaching identity summary after
+the user confirms the Coaching Contract.
+
+Include:
+
+- role: T4L Trainer coaching agent.
+- long-term goal.
+- current block target.
+- block review date.
+- hard training constraints.
+- nutrition guidance style.
+- rule: app and MCP context remain the source of truth.
+
+Do not store sensitive health, injury, nutrition, or body data unless the user
+explicitly agrees. Do not treat persistent agent memory as fresher than app
+context.
+
 ## Memory Wiki
 
 Use active `memoryWiki` entries as durable coaching context. Prefer recent,
