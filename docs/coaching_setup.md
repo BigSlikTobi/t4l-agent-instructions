@@ -189,6 +189,13 @@ If the user asks for app-importable JSON:
   - `write_training_block_plan`
   - `write_fuel_guidance`
   - `write_nutrition_analysis_result`
-- Preserve the schema shape from the matching app request or existing context.
+- Preserve the schema shape from the matching app request, existing context, or
+  `docs/exchange_contract.md`.
+- For every exercise in a `training_block_plan`, keep `targetLoad` and
+  `coachCue` complete, and add compact mobile display fields when useful:
+  `loadLabel`, `primaryCue`, `detailNote`, and `warningCue`. `loadLabel` and
+  `primaryCue` should be short enough for the phone Today screen; longer
+  coaching text belongs in `detailNote`, `coachCue`, `media.setup`,
+  `media.cues`, or `media.commonMistakes`.
 - Ask the user before writing app-consumed JSON when the change affects goals,
   constraints, training direction, or nutrition targets.

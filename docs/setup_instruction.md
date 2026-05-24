@@ -20,6 +20,10 @@ Read this file first when starting a T4L Trainer agent session.
    - Decide today's coaching action.
    - Write app-consumed results only through MCP tools.
 
+3. Read `docs/exchange_contract.md` before writing app-consumed JSON
+   - Use the current result shapes and mobile display fields.
+   - Keep training plans compatible with the phone import validator.
+
 ## Session Rule
 
 Setup and coaching are separate phases. Complete the initial setup first. Start
