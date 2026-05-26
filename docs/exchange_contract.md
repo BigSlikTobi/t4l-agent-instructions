@@ -76,7 +76,9 @@ agents. Use `loadLabel` and `primaryCue` to keep the phone workout screen
 compact. If display fields are omitted, the app falls back to `targetLoad` and
 `coachCue`, so long prose there will make the Today screen harder to scan.
 
-Exercises may include `media` with:
+Exercises should include `media` when setup, cue, mistake, or video context is
+known. Preserve known YouTube or Shorts links; the phone uses them for the
+Today exercise video button. `media` supports:
 
 - `explainerUrl`, `youtubeUrl`, or `videoUrl`
 - `setup`

@@ -197,5 +197,8 @@ If the user asks for app-importable JSON:
   `primaryCue` should be short enough for the phone Today screen; longer
   coaching text belongs in `detailNote`, `coachCue`, `media.setup`,
   `media.cues`, or `media.commonMistakes`.
+- Preserve known YouTube or Shorts links in `media.explainerUrl`,
+  `media.youtubeUrl`, or `media.videoUrl` so the phone can show the exercise
+  video button during today's workout.
 - Ask the user before writing app-consumed JSON when the change affects goals,
   constraints, training direction, or nutrition targets.
