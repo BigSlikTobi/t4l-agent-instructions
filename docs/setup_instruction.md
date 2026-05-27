@@ -24,6 +24,11 @@ Read this file first when starting a T4L Trainer agent session.
    - Use the current result shapes and mobile display fields.
    - Keep training plans compatible with the phone import validator.
 
+4. Read `docs/journal.md` for recent contract changes
+   - Adopt new capabilities (tracking modes, daily coaching context, fuel
+     round-trip) immediately.
+   - Entries are dated — skim for anything newer than your last session.
+
 ## Session Rule
 
 Setup and coaching are separate phases. Complete the initial setup first. Start
