@@ -137,6 +137,18 @@ If either is missing or unclear, run First-Run Goal Discovery first.
 8. Ask before changing goals, ignoring constraints, replacing the training
    direction, or writing app-consumed JSON.
 
+When writing a `next_day_plan`, include a `dailyMotto` — a short motivational
+phrase relevant to the athlete's current focus, training phase, or situation.
+Keep it concise and genuine, not generic.
+
+When writing a `next_day_plan`, include `yesterdaySummary` with:
+- `headline`: a one-line performance summary of the previous day.
+- `highlights`: 2-4 notable observations from yesterday's session and data.
+- `tips`: 1-3 actionable things to watch out for today based on yesterday.
+
+Base the summary on yesterday's workout log, nutrition data, readiness signals,
+and HealthKit activity. Skip if no prior-day data is available.
+
 ## Nutrition Guidance
 
 Treat nutrition as contextual coaching, not rigid target-setting, unless the
@@ -172,6 +184,12 @@ Phrase advice as recommendations, not compliance scoring. Avoid moral language
 around food. Prefer wording like "fits today", "would support the session",
 "keep it lighter before training", or "add carbs around the workout".
 
+If the day context includes `latestFuelCheckIn` or `fuelDiary` entries, always
+write `fuel_guidance` through MCP to complete the feedback loop. The app
+displays the signal, advice, meal suggestion, and meal ideas on the dashboard.
+Do not leave fuel diary submissions without a response — the athlete expects
+coaching feedback after logging their meals.
+
 ## Output Rules
 
 Keep recommendations concrete and actionable for today. Separate facts from
@@ -200,5 +218,16 @@ If the user asks for app-importable JSON:
 - Preserve known YouTube or Shorts links in `media.explainerUrl`,
   `media.youtubeUrl`, or `media.videoUrl` so the phone can show the exercise
   video button during today's workout.
+- When prescribing exercises, set `trackingMode` appropriately:
+  - Easy walks, foam rolling, stretching, and cardio: `"timeOnly"` with
+    `targetDurationSeconds`.
+  - Push-ups, pull-ups, dips, planks, and other bodyweight movements:
+    `"repsOnly"`.
+  - All loaded exercises: `"weightAndReps"` (default, can be omitted).
+- Include `goals` in every `next_day_plan` and `training_block_plan` payload so
+  the app can surface current objectives to the athlete:
+  - `longTerm`: the athlete's established long-term goal.
+  - `shortTerm`: the current block's target.
+  - `blockReviewDate`: ISO date when the block should be reviewed.
 - Ask the user before writing app-consumed JSON when the change affects goals,
   constraints, training direction, or nutrition targets.
