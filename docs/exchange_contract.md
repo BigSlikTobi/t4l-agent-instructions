@@ -10,15 +10,51 @@ in SQLite and does not own accepted training state.
 - `PUT /v1/context/day`
 - `PUT /v1/context/daily-snapshot`
 - `PUT /v1/profile`
-- compatibility `/files/{name}` endpoints during migration
+- `PUT /v1/requests/training-block`, `PUT /v1/requests/nutrition-analysis`
+- `POST /v1/blobs/meal-images/{name}` for meal photos
+
+There is no folder-based or `/files/{name}` exchange. The server rejects those
+paths.
+
+## Agent reads through MCP
+
+- `get_day_context`: primary current-day context.
+- `get_app_snapshot`: full phone sync payload when present.
+- `get_profile`: athlete profile.
+- `get_pending_requests`: pending app requests.
+- `get_training_block_request`: latest pending training-block request.
+- `get_nutrition_analysis_request`: latest pending meal-analysis request.
+- `get_blob_base64`: read an uploaded meal image. Pass the name from the
+  request, e.g. `{ "name": "meal_images/<file>.jpg" }`.
 
 ## Agent results through MCP
 
 - `write_training_block_plan`
+- `write_next_day_plan`
 - `write_fuel_guidance`
 - `write_nutrition_analysis_result`
 
-The app imports pending results only after user confirmation where needed.
+The app imports pending results only after user confirmation where needed;
+training blocks always require explicit user import.
+
+## Delivery and validation
+
+The server validates every write: a `schema` field, when present, must be a
+non-empty string. Set the correct `schema` for each result, or omit it to accept
+the default `<kind>.v1`. A non-string schema is rejected.
+
+The app validates each result when it imports it. A result the app cannot read
+is **discarded once** — it is not retried — and the user is told to ask you to
+resend. There is no silent retry, so always send complete, valid payloads. The
+app rejects:
+
+- `training_block_plan`: empty `workouts`, or `durationWeeks` below 1.
+- `next_day_plan`: a workout with no `exercises`.
+- `nutrition_analysis_result`: `calories` not greater than 0, or a negative
+  macro.
+
+`fuel_guidance` is always accepted. If a result is rejected, fix the payload and
+write it again.
 
 ## Training block plan shape
 
@@ -230,3 +266,42 @@ Valid `signal` values: `green`, `hold`, `fuel`, `deload`.
 - `hold`: nutrition is neutral, maintain current approach.
 - `fuel`: the athlete should eat more or focus on specific macros.
 - `deload`: reduce training intensity due to nutrition or recovery deficit.
+
+## Nutrition analysis result shape
+
+Use `write_nutrition_analysis_result` only when responding to a pending
+nutrition-analysis request. Read the request with `get_nutrition_analysis_request`
+and the meal photo, if any, with `get_blob_base64`, then echo the request's
+`requestId` in the result.
+
+```json
+{
+  "schema": "nutrition_analysis_result.v1",
+  "requestId": "<id from the request>",
+  "mealDescription": "Chicken, rice, and vegetables",
+  "calories": 780,
+  "protein": 48,
+  "carbs": 82,
+  "fat": 28,
+  "bodyWeightKg": 82.0,
+  "confidence": 0.7,
+  "assumptions": ["Estimated ~150 g cooked rice"],
+  "rationale": "Why these estimates and the target fit the context.",
+  "correctionNotes": "What the user should correct if the estimate is off.",
+  "target": {
+    "dailyCalories": 2750,
+    "protein": 175,
+    "carbs": 320,
+    "fat": 80,
+    "goalMode": "recomposition",
+    "rationale": "Training load supports maintenance."
+  }
+}
+```
+
+- `calories` must be greater than 0 and macros must be non-negative, or the app
+  discards the result.
+- `confidence` is in `0..1`. Image and text estimates are approximate, so always
+  include `assumptions`.
+- `target` is optional. When present, it updates the athlete's daily nutrition
+  target, so only include it intentionally.

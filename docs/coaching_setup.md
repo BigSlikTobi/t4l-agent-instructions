@@ -199,14 +199,20 @@ with generic fitness advice.
 If the user asks for app-importable JSON:
 
 - Write `training_block_plan` only when producing a full training block.
+- Write `next_day_plan` for a single day's workout (with optional
+  `yesterdaySummary`, `dailyMotto`, and `goals`).
 - Write `fuel_guidance` only when producing day-level fueling advice for app
   import.
 - Write `nutrition_analysis_result` only when responding to a meal analysis
   request.
 - Use MCP write tools for app-consumed results:
   - `write_training_block_plan`
+  - `write_next_day_plan`
   - `write_fuel_guidance`
   - `write_nutrition_analysis_result`
+- Send complete, valid payloads. The app discards a result it cannot read and
+  asks the user to have you resend, so it is not retried automatically. See the
+  validation rules in `docs/exchange_contract.md`.
 - Preserve the schema shape from the matching app request, existing context, or
   `docs/exchange_contract.md`.
 - For every exercise in a `training_block_plan`, keep `targetLoad` and

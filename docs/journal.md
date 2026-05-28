@@ -5,6 +5,58 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-05-28 — Server 0.2.0: write validation, no silent retries, complete tool list
+
+The self-hosted server is now `t4l-server` 0.2.0. Install and run are unchanged
+(`pipx install t4l-server`, then `t4l-server serve --data-dir ~/T4LServerData`).
+Add `--log-level DEBUG` when troubleshooting a connection.
+
+### Results are validated and bad ones are dropped, not retried
+
+This is the most important change. The app validates each result when it imports
+it. A result it cannot read is **discarded once** and the user is told to ask you
+to resend — there is no silent retry loop anymore. Send complete, valid payloads
+the first time. The app rejects:
+
+- `training_block_plan`: empty `workouts`, or `durationWeeks` below 1.
+- `next_day_plan`: a workout with no `exercises`.
+- `nutrition_analysis_result`: `calories` not greater than 0, or a negative macro.
+
+`fuel_guidance` is always accepted. If you learn a result was discarded, fix the
+payload and write it again.
+
+### Always set a valid `schema`
+
+The server now rejects a write whose `schema` field is present but not a
+non-empty string. Set the correct `schema` on each result (e.g.
+`"fuel_guidance.v1"`, `"nutrition_analysis_result.v1"`), or omit it to accept the
+default `<kind>.v1`.
+
+### Complete tool inventory (see `exchange_contract.md`)
+
+- `write_next_day_plan` is a first-class write tool — earlier tool lists omitted
+  it. Use it for single-day workouts.
+- Read tools are now documented in full, including `get_training_block_request`,
+  `get_nutrition_analysis_request`, and `get_blob_base64` (read a meal photo by
+  the `name` from the request).
+- The `nutrition_analysis_result` payload shape is now documented. Echo the
+  request's `requestId` and keep `calories` above 0.
+
+### `t4l-bridge` command removed
+
+Older setups exposed a `t4l-bridge` alias. It is gone — start the server with
+`t4l-server` only.
+
+### What to do differently starting now
+
+1. Send complete, valid result payloads — there is no retry safety net anymore.
+2. Set a correct `schema` string on every result (or omit it for the default).
+3. Use `write_next_day_plan` for single-day plans, and the documented
+   `nutrition_analysis_result` shape for meal analyses.
+4. Run the server with `t4l-server` (never `t4l-bridge`).
+
+---
+
 ## 2026-05-27 — Contract v2: Tracking Modes, Daily Coaching Context, Fuel Round-Trip
 
 ### Exercise tracking modes
