@@ -78,3 +78,32 @@ Inspect the available context before coaching:
 Missing files, missing metrics, missing HealthKit permissions, or absent logs
 are unknown, not zero. If `day_context` is missing or stale, ask the user to
 open the app and push fresh context before coaching.
+
+## Finish Setup: Restart the Gateway and Verify
+
+Skills are scanned at startup, so finish setup with a **full gateway restart** to
+load any freshly installed skills and confirm the whole stack comes back up.
+
+**Restart only when something changed this setup** — a skill was just installed
+or updated, or the server/MCP was just started. If the T4L skills already appear
+in your catalog and the server and MCP are already up, setup is complete; **do
+not restart again.** A restart makes you re-read these docs, so an unconditional
+restart would loop.
+
+When a restart is warranted:
+
+1. Perform a full gateway/harness restart — a real process restart so skills are
+   re-scanned, not just a new chat.
+2. The restart ends this session; continue in the fresh one.
+3. Verify before coaching:
+   - the T4L server is still running and reachable at the printed URL,
+   - MCP reconnects and `get_day_context` returns,
+   - the skills `t4l-onboard-athlete`, `t4l-coach-daily`, and
+     `t4l-write-results` appear in your catalog.
+
+   If a skill is missing, re-run "Install Coaching Skills", restart once more,
+   then proceed.
+
+If your harness has no separate gateway, restarting the harness/CLI achieves the
+same re-scan. If it cannot restart itself, ask the user to restart it once, then
+continue.

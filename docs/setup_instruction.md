@@ -12,6 +12,9 @@ Read this file first when starting a T4L Trainer agent session.
    - Connect the agent to MCP.
    - Install the coaching skills into your harness (if it supports skills) so
      future sessions load them automatically — the user does not do this by hand.
+   - Finish with a full gateway restart **when something changed** (e.g. skills
+     were just installed) so the skills load; then verify the server, MCP, and
+     skills are up. Skip the restart if everything is already loaded and running.
    - Wait for fresh app context before coaching.
 
 2. Read `docs/coaching_setup.md`
@@ -33,6 +36,9 @@ Read this file first when starting a T4L Trainer agent session.
 
 ## Session Rule
 
-Setup and coaching are separate phases. Complete the initial setup first. Start
-coaching only after the app has connected to the server and `get_day_context`
-returns fresh context for the current session.
+Setup and coaching are separate phases. Complete the initial setup first. End
+setup with a full gateway restart whenever something changed (so newly installed
+skills load), then verify the server, MCP, and skills are up — but never restart
+unconditionally, or you will loop. Start coaching only after the app has
+connected to the server and `get_day_context` returns fresh context for the
+current session.

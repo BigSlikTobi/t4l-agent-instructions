@@ -48,9 +48,11 @@ are non-fatal contract gaps. It is dependency-free (standard library only).
 1. If your harness supports skills, self-install them during setup — see
    "Install Coaching Skills" in `initial_setup.md`. The agent installs the
    `skills/` folders into its own skills directory so future sessions load them
-   automatically; the user never copies files by hand. They take effect from the
-   next session (skills are scanned at startup). If your harness does not support
-   skills, the `docs/` still work exactly as before.
+   automatically; the user never copies files by hand. Finish setup with a full
+   gateway restart **when something changed** (skills are scanned at startup, so
+   the restart loads them) — but skip the restart when everything is already
+   loaded and running, or you will loop. If your harness does not support skills,
+   the `docs/` still work exactly as before.
 2. Before any MCP write, run `validate_payload.py` on the payload (or hand-check
    against `t4l-write-results/SKILL.md`) and fix every `ERROR`.
 3. Keep reading `docs/setup_instruction.md` first — skills cover coaching, not
