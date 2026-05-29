@@ -5,6 +5,56 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-05-29 — Agent Skills: portable SKILL.md coaching skills + payload validator
+
+The repo now ships **Agent Skills** under `skills/` — the on-demand procedural
+layer for the coaching phase. They follow the open `SKILL.md` convention
+(agentskills.io), so any skills-capable harness (Claude Code, Codex CLI, Gemini
+CLI, OpenCode, OpenClaw, Hermes, …) on any sufficiently capable model can load
+them. The harness handles discovery and progressive disclosure; you act on a
+skill's body when its description matches the task.
+
+### The three skills
+
+- `t4l-onboard-athlete` — first-run goal discovery and the Coaching Contract,
+  when the long-term goal or current block target is missing or unclear.
+- `t4l-coach-daily` — the morning coaching loop: turn synced MCP context into
+  today's action (`progress` / `hold` / `substitute` / `deload` / `rest`) plus
+  nutrition guidance and the fuel round-trip.
+- `t4l-write-results` — which MCP write tool to use, the full payload shapes
+  (`reference/payload-shapes.md`), and a validator (below).
+
+The skills distil `coaching_setup.md` and `exchange_contract.md`; those docs
+remain the canonical reference. The one-time server/MCP bootstrap
+(`initial_setup.md`) is intentionally **not** a skill.
+
+### Validate result payloads before writing them
+
+`skills/t4l-write-results/scripts/validate_payload.py` reproduces the app's
+import rules so you can self-check a payload before calling a write tool — the
+app discards an unreadable result once, with no retry.
+
+```bash
+python skills/t4l-write-results/scripts/validate_payload.py <kind> payload.json
+# or:  cat payload.json | python .../validate_payload.py <kind>
+# kind = training_block_plan | next_day_plan | fuel_guidance | nutrition_analysis_result
+```
+
+`ERROR:` lines (exit 1) are what the app would discard; `WARN:` lines (exit 0)
+are non-fatal contract gaps. It is dependency-free (standard library only).
+
+### What to do differently starting now
+
+1. If your harness supports skills, install `skills/` (symlink into the harness
+   skill dir, or `npx skills install`) and let the skills drive the coaching
+   phase. If it does not, the `docs/` still work exactly as before.
+2. Before any MCP write, run `validate_payload.py` on the payload (or hand-check
+   against `t4l-write-results/SKILL.md`) and fix every `ERROR`.
+3. Keep reading `docs/setup_instruction.md` first — skills cover coaching, not
+   the server/MCP bootstrap.
+
+---
+
 ## 2026-05-28 — Server 0.2.0: write validation, no silent retries, complete tool list
 
 The self-hosted server is now `t4l-server` 0.2.0. Install and run are unchanged
