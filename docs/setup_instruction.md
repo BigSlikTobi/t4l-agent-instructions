@@ -10,6 +10,8 @@ Read this file first when starting a T4L Trainer agent session.
    - Give the user the Server URL and API key.
    - Connect the app to the server.
    - Connect the agent to MCP.
+   - Install the coaching skills into your harness (if it supports skills) so
+     future sessions load them automatically — the user does not do this by hand.
    - Wait for fresh app context before coaching.
 
 2. Read `docs/coaching_setup.md`

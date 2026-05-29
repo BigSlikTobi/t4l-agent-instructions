@@ -23,6 +23,37 @@ agent, the self-hosted T4L server, and the T4L Trainer app.
 6. Wait until the user connects the app and migrates or pushes fresh context.
    Do not coach from memory alone.
 
+## Install Coaching Skills (one-time, self-service)
+
+If your harness supports Agent Skills (the `SKILL.md` convention), install the
+T4L coaching skills into your own skills directory so future sessions load them
+automatically. **Do this for the user — they do not run git or copy files by
+hand.**
+
+1. Locate your harness's skills directory. Common locations:
+   - Hermes: `~/.hermes/skills/`
+   - OpenClaw: `~/.openclaw/workspace/skills/`
+   - Claude Code: `.claude/skills/` (project) or `~/.claude/skills/` (global)
+   - Gemini CLI / OpenCode: their skills dir (e.g. `.agents/skills/`,
+     `.opencode/skills/`, or `~/.gemini/...`).
+
+   If unsure, check your harness docs for "skills directory".
+2. For each skill folder in this repo's `skills/` directory —
+   `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results` — make it
+   available there. Prefer a symlink so `git pull` keeps it current; copy the
+   folder if symlinks are unsupported. If you only have remote access to this
+   repo, fetch each skill's `SKILL.md` (plus `t4l-write-results/reference/` and
+   `scripts/`) and write them into the skills directory.
+3. Make it idempotent: if a T4L skill is already present, refresh it rather than
+   creating a duplicate.
+4. Skills are scanned at harness **startup**, so a freshly installed skill takes
+   effect from your **next** session. Reload or restart the harness if it
+   supports that. For this first session, keep following these docs directly —
+   they are the source the skills were built from.
+
+If your harness does not support skills, skip this section. The `docs/` workflow
+works exactly as before.
+
 ## Source Of Truth
 
 Use MCP tools as the source of truth for the session. Treat `get_day_context`

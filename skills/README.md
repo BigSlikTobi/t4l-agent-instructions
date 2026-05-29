@@ -37,6 +37,13 @@ Kept to the lowest common denominator so one `SKILL.md` runs everywhere:
 
 ## Deploying to a harness
 
+**The agent self-installs these during setup.** `docs/initial_setup.md`
+instructs the coaching agent to copy/symlink the `skills/` folders into its own
+harness skills directory, so a non-technical user never runs git or copies files
+— they just launch the agent. Skills are scanned at startup, so a fresh install
+takes effect from the next session. The manual commands below are for devs or
+for pre-seeding a machine.
+
 Discovery paths differ per harness, so point each one at these skills with a
 copy or symlink, e.g.:
 
