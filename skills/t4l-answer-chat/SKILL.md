@@ -58,6 +58,27 @@ turns rather than answering them fast, and test the heavy path end to end — a
 fast-path-only test passes even when escalation is broken. Full detail in
 "Two-tier replies" in `docs/coaching_setup.md`.
 
+## Routing: self-report, don't keyword-match
+
+Do **not** decide escalation with a keyword list ("yesterday", "Wednesday", …)
+or by regex-scanning the fast model's reply for apologies — that regresses on
+every new phrasing. Instead:
+
+1. **Feed the fast model a compact recent-history digest** (last ~7 days of
+   training-log summaries from `daily_snapshot:latest.recentLogs`, one line per
+   day) alongside `get_day_context`. Then most "what about Wednesday / the day
+   before yesterday / earlier this week" questions are answered fast and
+   directly — no keyword list, no escalation.
+2. **Let the model emit a structured escalation signal** for what it truly can't
+   handle: instruct it to reply with exactly `{"escalate": true, "reason": "…"}`
+   when it lacks data or the turn needs deep analysis/plan work, and branch on
+   that field — never on its prose. Robust to phrasing, and it stops the inverse
+   bug (the model confidently answering with data it doesn't have).
+
+Always keep the safety override (pain/injury/illness escalate regardless), and
+remember the heavy path can only answer about days actually in the synced
+artifacts. Full detail in "Routing" in `docs/coaching_setup.md`.
+
 ## Liveness and speed
 
 A run answers the backlog once. The chat only feels live if this routine runs on

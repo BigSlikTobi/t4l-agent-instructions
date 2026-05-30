@@ -354,6 +354,68 @@ Additional rules for the two-tier pattern:
   completely broken. Send one genuinely heavy question and confirm the *real*
   answer lands after the ack.
 
+### Routing: let the model self-report missing context — do not keyword-match
+
+The hard part of two-tier chat is deciding *which* turns escalate. The tempting
+approach — a keyword list ("yesterday", "Wednesday", "two days ago", …) plus a
+regex that scans the fast model's reply for apologies ("I don't have that log") —
+**does not work and should not be used.** It regresses on every new phrasing:
+add "yesterday", then "day before yesterday" breaks, then "Wednesday", then
+"last Monday", then "compared to last week". You are pattern-matching natural
+language, which is unbounded. Two robust rules replace it.
+
+**1. Give the fast model enough context to answer most date questions directly.**
+The usual root cause of a dead-end reply ("I only have today and yesterday") is
+that the fast path was fed a *today-scoped* context, so it genuinely never had
+the older data — it is not lying, it was never given the logs. Fix the context,
+not the classifier: inject a **compact recent-history digest** into the fast
+prompt — e.g. the last ~7 days of training-log summaries. These already exist in
+the synced artifacts (`daily_snapshot:latest.recentLogs`); a one-line-per-day
+digest (date, title, key sets/RPE, soreness) is small enough to keep replies
+fast. With history in context, "what about Wednesday?" / "the day before
+yesterday" / "earlier this week" are answered **fast and directly**, with no
+keyword list and no escalation.
+
+**2. Let the fast model emit a structured escalation signal — never scan its
+prose.** For turns it genuinely cannot handle (data outside the digest window,
+real plan generation, deep multi-week analysis), have the fast model *tell you*
+in a machine-readable field rather than detecting English apologies. For example
+instruct it to return JSON and branch on a field:
+
+```text
+fast model is told: "Answer if you have enough context. If you lack the data or
+the request needs deep analysis/plan work, reply with exactly
+{"escalate": true, "reason": "..."} and nothing else."
+
+loop:
+  out = fast_model(Q, day_context + recent_history_digest + recent_chat)
+  if out.escalate:
+     write_chat_reply("On it — pulling the full picture. 🧠", inReplyToSeq=N)
+     answer = strong_model(Q, full_history)   # Q + seq carried in memory
+     write_chat_reply(answer)
+  else:
+     write_chat_reply(out.text, inReplyToSeq=N)
+```
+
+This is robust to phrasing: you branch on a boolean the model sets, not on how it
+happened to word a limitation. It also fixes the inverse bug — the fast model
+quietly answering with data it does *not* have — because "I lack context" becomes
+an explicit escalation, not a sentence the athlete sees.
+
+**Keep the conservative safety override.** Independent of the signal, always
+escalate (or answer cautiously) on pain / injury / dizziness / illness / "should
+I push through this?" — never let a fast model give a breezy reply there.
+
+**Know your history window.** The heavy path can only answer about days that are
+actually in the synced artifacts. If the app syncs a limited window, a question
+about a date outside it will dead-end *even through the strong model*. Confirm
+the retention before claiming history questions are fully solved, and have the
+model say "that day isn't in my synced data" rather than inventing it.
+
+Net effect: most date/history questions are answered directly by the fast model
+(history is in context); the rest escalate because the model *said so*, not
+because a regex guessed. No keyword list, no apology-scanner — both are removed.
+
 ## Output Rules
 
 Keep recommendations concrete and actionable for today. Separate facts from
