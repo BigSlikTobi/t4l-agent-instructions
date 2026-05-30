@@ -75,6 +75,23 @@ every new phrasing. Instead:
    that field — never on its prose. Robust to phrasing, and it stops the inverse
    bug (the model confidently answering with data it doesn't have).
 
+**Fast model: answer or escalate — never a terminal "sorry".** The fast model is
+allowed exactly two outputs: a real answer, or `{"escalate": true}`. It must
+**never** send the athlete a dead-end ("couldn't find that", "I don't have that
+log", "send me what you did"). Any not-sure / missing-data / low-confidence case
+is an escalation. The model:
+
+- knows the answer → sends it;
+- does not know → posts "Give me a second…" and escalates to the reasoning model.
+
+Treat a malformed/empty fast-model output as an escalation too (fail toward the
+reasoning model, never toward a dead-end). **Escalation must always conclude:**
+after the ack the turn leaves the pending queue, so the reasoning step is solely
+responsible for posting the real answer — carry the question in memory, run it,
+and always `write_chat_reply` the result; if it errors, post a real status, never
+silence. Only the reasoning model — after actually checking — may tell the
+athlete a fact isn't available.
+
 Always keep the safety override (pain/injury/illness escalate regardless), and
 remember the heavy path can only answer about days actually in the synced
 artifacts. Full detail in "Routing" in `docs/coaching_setup.md`.

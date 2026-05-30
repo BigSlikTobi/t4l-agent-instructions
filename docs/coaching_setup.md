@@ -422,6 +422,40 @@ happened to word a limitation. It also fixes the inverse bug — the fast model
 quietly answering with data it does *not* have — because "I lack context" becomes
 an explicit escalation, not a sentence the athlete sees.
 
+**The fast model has exactly two outputs: answer, or escalate — never a
+terminal "sorry".** This is the core rule. The fast model is allowed to (a)
+return a real answer, or (b) escalate. It is **never** allowed to send the
+athlete a dead-end like "I couldn't find that" / "I don't have that log" /
+"send me what you did". Any not-sure, missing-data, or low-confidence outcome is
+an **escalation**, not a reply. Only the reasoning model — *after it has actually
+checked the full history and tools* — may tell the athlete a fact genuinely
+isn't available, and even then it says specifically what it checked.
+
+So the mental model is exactly:
+
+- **Fast model knows the answer → it sends the answer.**
+- **Fast model does not know → it posts "Give me a second…" and escalates to the
+  reasoning model.** The athlete never sees the fast model give up.
+
+Make the fast model's instruction enforce this: *"You may either answer fully
+from the context you were given, or escalate. If you are missing data, unsure,
+or the request needs deeper analysis, you MUST escalate — never tell the athlete
+you couldn't find something or ask them to supply data. Reply with exactly
+`{\"escalate\": true, \"reason\": \"...\"}`."* Treat a malformed or empty
+fast-model output (no parseable answer **and** no escalate flag) as an
+escalation too — fail toward the reasoning model, never toward a dead-end.
+
+**Escalation must always conclude with a posted answer.** Once you post the
+"Give me a second…" ack, the user turn is marked `answered` and leaves the
+pending queue — so the reasoning step is now solely responsible for delivering
+the real reply. Carry the question in memory (see "Two-tier replies"), run the
+reasoning model (MCP reads, history, tools — this legitimately takes longer than
+a fast reply), and **always** post a fresh `write_chat_reply` with its result.
+If the reasoning model itself errors or returns nothing, post a real status
+("I dug in but hit a problem pulling that — try again in a moment"), not silence
+and not the fast model's abandoned apology. A turn that got an ack must never be
+left with only the ack.
+
 **Keep the conservative safety override.** Independent of the signal, always
 escalate (or answer cautiously) on pain / injury / dizziness / illness / "should
 I push through this?" — never let a fast model give a breezy reply there.
