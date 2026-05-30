@@ -37,8 +37,15 @@ Payload fields and the turn lifecycle are in `docs/exchange_contract.md`
 - **Safe to run often.** Answering a turn marks it `answered`, so repeated runs
   never double-reply.
 
-## Liveness
+## Liveness and speed
 
 A run answers the backlog once. The chat only feels live if this routine runs on
-a short interval (a watch loop or cron on the agent's host). See "Making chat
-live (scheduling)" in `docs/coaching_setup.md`.
+a short interval. **Prefer one warm, long-lived process that loops internally**
+(connect to MCP once, then poll every ~2–4 s) over re-launching the harness per
+reply — re-launching pays process-boot + doc-reading + MCP-handshake on every
+turn, which is what makes replies take tens of seconds.
+
+If you must re-invoke per turn, scope each invocation to **answering only** — do
+not re-run the one-time setup or re-read the setup docs just to answer a chat
+turn, and keep chat replies on a fast model with a small token budget. See
+"Making chat live (scheduling)" in `docs/coaching_setup.md`.

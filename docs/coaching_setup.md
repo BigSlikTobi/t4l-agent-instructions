@@ -226,29 +226,62 @@ would only answer chat when you happen to run. To make the in-app chat feel
 live, run the answer routine on a short interval on the machine that hosts the
 agent (the same box as the server).
 
-Use whatever non-interactive / headless mode your harness supports, scheduled on
-a short interval. For example, a watch loop that runs an "answer the chat
-channel" prompt every 20–30 seconds:
+**Keep the loop fast — this is the part that decides whether chat feels live or
+sluggish.** The answer routine itself is tiny (one MCP read, the reply, one MCP
+write). Almost all perceived latency comes from *how the loop is hosted*, not
+from the routine. Prefer the patterns below in order.
+
+**1. Best: one warm, long-lived process that loops internally.** Start the agent
+once, let it connect to MCP once, then loop inside that same session:
+
+```text
+(one agent session, already connected to MCP)
+repeat forever:
+  msgs = get_pending_chat_messages()
+  for each msg: read get_day_context, write_chat_reply(inReplyToSeq=seq)
+  wait ~2–4 seconds
+```
+
+This pays the startup cost (process boot, reading these docs, MCP handshake,
+skill scan) **once**, so each reply is just poll-gap + model time — typically a
+few seconds. Use this whenever your harness can stay running.
+
+**2. Acceptable fallback: re-invoke headless on a short interval.**
 
 ```bash
 while true; do
-  <your-harness> --headless "Run the t4l chat answer routine: call \
-    get_pending_chat_messages and reply to each via write_chat_reply." \
+  <your-harness> --headless "Run the t4l chat answer routine only: call \
+    get_pending_chat_messages and reply to each via write_chat_reply. \
+    Do NOT run setup or re-read setup docs." \
     || true
-  sleep 20
+  sleep 3
 done
 ```
 
-or the equivalent as a `cron` entry (1-minute granularity) or a systemd timer.
-Adapt the command to your harness.
+**Avoid the slow trap.** If each loop iteration cold-starts the harness *and*
+re-runs the setup sequence (verify server, install skills, gateway restart,
+re-read every doc), every single reply pays the full setup tax — that is what
+makes replies take ~30–60 seconds instead of a few. If you must re-invoke per
+turn:
 
-- Replies land within roughly one interval. Tighten the interval for snappier
-  chat; widen it to reduce token cost, since each run may read context and call
-  the model.
+- Scope each invocation to the **coaching/answer phase only** — never re-run the
+  one-time setup (`initial_setup.md`) just to answer a chat turn.
+- Keep the prompt minimal (the line above), so the harness loads the
+  `t4l-answer-chat` skill and acts, rather than re-reading the whole doc set.
+- Use a **fast model and a small token budget** for chat replies — they are
+  short conversational turns, not plans.
+
+Tuning, either pattern:
+
+- Replies land within roughly one poll interval. Tighten the interval for
+  snappier chat (2–4 s is fine for a warm loop); widen it to reduce token cost.
 - The routine is safe to run frequently: answering a turn marks it `answered`,
   so overlapping or rapid runs will not double-reply.
 - A live workout is most useful when the interval is short — pick a cadence that
   matches how quickly the athlete expects a reply mid-session.
+- If replies take tens of seconds, the loop is almost certainly cold-starting
+  and/or re-running setup each turn — switch to the warm-process pattern, or
+  scope the headless prompt to answering only.
 
 ## Output Rules
 
