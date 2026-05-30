@@ -283,6 +283,28 @@ Tuning, either pattern:
   and/or re-running setup each turn — switch to the warm-process pattern, or
   scope the headless prompt to answering only.
 
+### Model choice: split fast chat from heavy planning
+
+Chat replies are short conversational turns; training plans are not. Use a
+different model for each so neither task pays the other's cost:
+
+- **Chat answer loop → a fast, low-reasoning model** (e.g. a Haiku / mini /
+  Flash-class model). Conversational replies do not need deep reasoning, and a
+  heavy reasoning model spends most of its latency "thinking" before it answers
+  "how was my run?". This is usually the single biggest speedup after fixing the
+  loop hosting.
+- **Plan generation → your strongest reasoning model.** Building a
+  `training_block_plan` or `next_day_plan` is not real-time and rewards
+  reasoning, so keep the heavy model there.
+
+If you would rather keep one model for both, **lower its reasoning effort for the
+chat loop** (e.g. minimal/low) instead of running it at full reasoning — a heavy
+model at full effort can spend 20–60 s reasoning on a one-sentence reply.
+
+This is a harness configuration choice (which model the answer loop invokes),
+not part of the server or the contract, so it stays model-agnostic: "fast model
+for chat, strong model for plans" holds for any vendor.
+
 ## Output Rules
 
 Keep recommendations concrete and actionable for today. Separate facts from

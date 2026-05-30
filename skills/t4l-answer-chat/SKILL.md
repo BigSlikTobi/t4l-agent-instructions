@@ -47,5 +47,11 @@ turn, which is what makes replies take tens of seconds.
 
 If you must re-invoke per turn, scope each invocation to **answering only** — do
 not re-run the one-time setup or re-read the setup docs just to answer a chat
-turn, and keep chat replies on a fast model with a small token budget. See
-"Making chat live (scheduling)" in `docs/coaching_setup.md`.
+turn.
+
+Run the chat loop on a **fast, low-reasoning model** (Haiku / mini / Flash-class)
+with a small token budget — conversational replies do not need heavy reasoning,
+and a reasoning-heavy model spends most of its latency thinking before it
+answers. Keep your strong reasoning model for plan generation
+(**t4l-write-results**), not for chat. See "Model choice" and "Making chat live
+(scheduling)" in `docs/coaching_setup.md`.
