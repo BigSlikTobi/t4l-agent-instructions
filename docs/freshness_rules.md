@@ -1,7 +1,18 @@
 # Freshness Rules
 
 - Treat MCP `get_day_context` as the primary current-day context.
-- Do not coach until a fresh app sync has happened in the current session.
+- Do not coach (first session of the day, plans, reviews) until current context
+  is on the server. The app auto-pushes `day_context` **and** `daily_snapshot`
+  after each workout, reflection, and fuel event, and on the manual "Context
+  Push"; if nothing has been synced this session, ask the user to open the app
+  and push.
+- For in-app chat, re-read the artifacts **each turn** — `get_day_context` for
+  today and `daily_snapshot:latest` for recent history (`recentLogs`). Do not
+  cache them for the life of a warm chat loop, or you will answer from stale
+  data after the athlete logs new work. See "Routing" in `coaching_setup.md`.
+- Freshness is bounded by the app's last push: a set logged *mid-workout* is not
+  on the server until the workout is completed, and `recentLogs` holds only the
+  ~10 most recent logs. Treat data outside that window as unavailable.
 - Missing HealthKit, nutrition, or workout fields are unknown, not zero.
 - If context is stale or server sync fails, ask the user to open the app,
   reconnect the server, and push fresh context.

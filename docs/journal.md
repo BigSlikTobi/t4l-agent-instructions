@@ -5,6 +5,32 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-05-30 — Chat freshness: snapshot auto-pushes; rebuild the digest per turn
+
+Two changes that keep the in-app coach chat current.
+
+**The app now auto-pushes `daily_snapshot` on workout events.** Previously the
+daily snapshot (which carries `recentLogs`, your recent-training history) was
+sent only when the athlete tapped "Context Push". Now the app refreshes it after
+**every workout completion, reflection, and fuel event**, alongside the existing
+`day_context` push. So the athlete's recent history reaches the server
+automatically — no manual push needed for the chat to know about a workout they
+just finished.
+
+**You must rebuild the recent-history digest every turn — never cache it.** The
+digest is derived live from `daily_snapshot:latest`; read it fresh inside the
+per-message handler each time you answer. A warm chat loop runs for days, so
+building the digest once at start-up serves stale history. Rebuilding per turn
+is cheap (one artifact read, no model call); don't rebuild on empty polls.
+
+Limits to respect (say so, don't invent): a set logged *mid-workout* is not on
+the server until the workout completes, and `recentLogs` holds only the ~10 most
+recent logs, so older sessions have no data.
+
+See "Routing" in `coaching_setup.md` and the updated `freshness_rules.md`.
+
+---
+
 ## 2026-05-29 — Live in-app chat channel (replaces 3rd-party chat apps)
 
 The athlete now chats with you **inside the T4L app**, not through Slack,

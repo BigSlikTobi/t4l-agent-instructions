@@ -369,12 +369,32 @@ The usual root cause of a dead-end reply ("I only have today and yesterday") is
 that the fast path was fed a *today-scoped* context, so it genuinely never had
 the older data — it is not lying, it was never given the logs. Fix the context,
 not the classifier: inject a **compact recent-history digest** into the fast
-prompt — e.g. the last ~7 days of training-log summaries. These already exist in
-the synced artifacts (`daily_snapshot:latest.recentLogs`); a one-line-per-day
-digest (date, title, key sets/RPE, soreness) is small enough to keep replies
-fast. With history in context, "what about Wednesday?" / "the day before
-yesterday" / "earlier this week" are answered **fast and directly**, with no
-keyword list and no escalation.
+prompt — e.g. the last several training-log summaries. These already exist in
+the synced artifacts (`daily_snapshot:latest.recentLogs` — the most recent ~10
+logs); a one-line-per-day digest (date, title, key sets/RPE, soreness) is small
+enough to keep replies fast. With history in context, "what about Wednesday?" /
+"the day before yesterday" / "earlier this week" are answered **fast and
+directly**, with no keyword list and no escalation.
+
+**Rebuild the digest every turn — never cache it for the process lifetime.** The
+digest is not a stored object; it is derived live from `daily_snapshot:latest`.
+Read that artifact fresh **inside the per-message handler** (right before you
+answer a given turn) and rebuild the digest from it each time. A warm,
+long-lived loop runs for days, so building the digest once at start-up — or
+caching it in a module/global — silently serves stale history: workouts the
+athlete logs later never appear in chat until the service restarts. Rebuilding
+per turn is cheap (one artifact read plus string formatting, no model call). Do
+**not** rebuild on empty polls — only when there is actually a message to
+answer. The heavy/escalation path must likewise read `daily_snapshot:latest`
+fresh at escalation time, not from a cached copy.
+
+The app keeps that artifact current for you: it **auto-pushes a fresh
+`daily_snapshot` after every workout, reflection, and fuel event** (not only on
+a manual "Context Push"). So once the athlete finishes a workout, the next chat
+turn — if you rebuilt the digest — already reflects it. The remaining limits are
+the app's: a set logged *mid-workout* does not sync until the workout is
+completed, and `recentLogs` carries only the most recent ~10 logs, so questions
+about older sessions have no data (say so rather than inventing it).
 
 **2. Let the fast model emit a structured escalation signal — never scan its
 prose.** For turns it genuinely cannot handle (data outside the digest window,
