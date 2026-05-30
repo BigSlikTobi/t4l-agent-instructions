@@ -6,111 +6,53 @@ description: Use when the athlete has sent in-app chat messages. Drains pending 
 # T4L Answer Chat
 
 The athlete chats with you **inside the app** — this replaces any third-party
-chat app. The self-hosted server relays the conversation over MCP. Your job
-here is fast, conversational replies, not coaching documents.
+chat app. The self-hosted server relays the conversation over MCP. This skill is
+the **answer-time** behavior: how to reply well to a chat turn. The build/run
+side of the chat loop (model split, warm-loop hosting, polling, routing,
+freshness) lives in `docs/coaching_setup.md` — read it when building or tuning
+the loop, not on every reply.
 
-Payload fields and the turn lifecycle are in `docs/exchange_contract.md`
+Payload fields and the turn lifecycle: `docs/exchange_contract.md`
 ("Live chat channel shape").
 
 ## Routine
 
-1. Call `get_pending_chat_messages`. Empty → nothing to do.
+1. `get_pending_chat_messages` → empty means nothing to do.
 2. For each pending message, **oldest first**:
-   - Read `get_day_context` (and `get_profile` / `get_app_snapshot` if needed)
-     so the reply reflects the athlete's real, current state — including the
-     **live workout in progress** when present (current exercise, sets/reps
-     logged so far). This is what lets you coach mid-set.
-   - Write a short, direct reply. Answer the actual question; no boilerplate.
-   - Post it with `write_chat_reply`, passing the message's `seq` as
-     `inReplyToSeq`. That marks the turn answered so it is not returned again.
+   - Read `get_day_context` (and `get_profile` / `get_app_snapshot` if needed),
+     plus recent history (`daily_snapshot:latest.recentLogs`), so the reply
+     reflects the athlete's real, current state — including a **live workout in
+     progress**. Re-read these each turn; never answer from a cached copy.
+   - Write a short, direct reply to the actual question.
+   - Post with `write_chat_reply`, passing the message's `seq` as `inReplyToSeq`
+     — that marks the turn answered so it is not returned again.
 
-## Rules
+## How to answer
 
-- **Conversational, not a document.** Keep it tight — this is live chat.
-- **Missing data is unknown, not zero.** Don't invent health/log data; if you
-  need something the context doesn't have, ask in the reply.
-- **Don't write plans from a casual question.** A normal chat answer is just
-  `write_chat_reply`. Only switch to **t4l-write-results** (`write_next_day_plan`,
-  `write_training_block_plan`, `write_fuel_guidance`) when the athlete actually
-  asks for app-importable output, and still ask before writing app-consumed JSON
-  that changes goals, constraints, training direction, or nutrition targets.
+- **Conversational, not a document.** Tight, direct, no boilerplate. This is
+  live chat.
+- **Workout-aware.** Ground answers in the synced context and recent logs, so
+  "how was my run?" / "what about Wednesday?" reflect real data.
+- **Never dead-end.** Do not tell the athlete "I couldn't find that" or "send me
+  what you did". If you lack the data or the turn needs deep analysis, that is an
+  **escalation**, not a reply — post a brief "give me a second…" and hand the
+  question (in memory, with its `seq`) to the reasoning model, which then posts
+  the real answer. Only after actually checking the full history/tools may you
+  say a fact genuinely isn't in the synced data — and say specifically what you
+  checked. Never invent health/log data.
+- **An escalation always concludes.** Once the ack is posted the turn leaves the
+  pending queue, so you own delivering the result: always `write_chat_reply` the
+  reasoning model's answer; if it errors, post a real status, never silence.
+- **Don't write plans from a casual question.** A chat answer is just
+  `write_chat_reply`. Switch to **t4l-write-results** only when the athlete asks
+  for app-importable output, and ask before writing app-consumed JSON that
+  changes goals, constraints, training direction, or nutrition targets.
+- **Safety first.** Pain, injury, dizziness, illness, or "should I push through
+  this?" get a careful, conservative answer (escalate when unsure) — never a
+  breezy reply.
 - **Safe to run often.** Answering a turn marks it `answered`, so repeated runs
   never double-reply.
 
-## Two-tier replies (fast ack, then escalate)
-
-If you ack a heavy turn on the fast model and hand the real work to a strong
-model, beware the trap: **posting the ack marks the user turn `answered`**, so
-`get_pending_chat_messages` is then empty. The heavy worker must receive the
-question **in memory** — never re-poll the queue for it — and then post the real
-answer as a fresh `write_chat_reply`.
-
-```text
-heavy turn (seq=N, text=Q):
-  write_chat_reply("On it — give me a minute. 🧠", inReplyToSeq=N)
-  answer = strong_model(Q, full_context)   # Q carried in memory, not re-fetched
-  write_chat_reply(answer)                  # fresh reply; queue is already empty
-```
-
-Also: read `get_day_context` on the fast path too (don't go workout-blind), keep
-the ack distinct from any error/fallback string, escalate safety/pain/injury
-turns rather than answering them fast, and test the heavy path end to end — a
-fast-path-only test passes even when escalation is broken. Full detail in
-"Two-tier replies" in `docs/coaching_setup.md`.
-
-## Routing: self-report, don't keyword-match
-
-Do **not** decide escalation with a keyword list ("yesterday", "Wednesday", …)
-or by regex-scanning the fast model's reply for apologies — that regresses on
-every new phrasing. Instead:
-
-1. **Feed the fast model a compact recent-history digest** (last ~7 days of
-   training-log summaries from `daily_snapshot:latest.recentLogs`, one line per
-   day) alongside `get_day_context`. Then most "what about Wednesday / the day
-   before yesterday / earlier this week" questions are answered fast and
-   directly — no keyword list, no escalation.
-2. **Let the model emit a structured escalation signal** for what it truly can't
-   handle: instruct it to reply with exactly `{"escalate": true, "reason": "…"}`
-   when it lacks data or the turn needs deep analysis/plan work, and branch on
-   that field — never on its prose. Robust to phrasing, and it stops the inverse
-   bug (the model confidently answering with data it doesn't have).
-
-**Fast model: answer or escalate — never a terminal "sorry".** The fast model is
-allowed exactly two outputs: a real answer, or `{"escalate": true}`. It must
-**never** send the athlete a dead-end ("couldn't find that", "I don't have that
-log", "send me what you did"). Any not-sure / missing-data / low-confidence case
-is an escalation. The model:
-
-- knows the answer → sends it;
-- does not know → posts "Give me a second…" and escalates to the reasoning model.
-
-Treat a malformed/empty fast-model output as an escalation too (fail toward the
-reasoning model, never toward a dead-end). **Escalation must always conclude:**
-after the ack the turn leaves the pending queue, so the reasoning step is solely
-responsible for posting the real answer — carry the question in memory, run it,
-and always `write_chat_reply` the result; if it errors, post a real status, never
-silence. Only the reasoning model — after actually checking — may tell the
-athlete a fact isn't available.
-
-Always keep the safety override (pain/injury/illness escalate regardless), and
-remember the heavy path can only answer about days actually in the synced
-artifacts. Full detail in "Routing" in `docs/coaching_setup.md`.
-
-## Liveness and speed
-
-A run answers the backlog once. The chat only feels live if this routine runs on
-a short interval. **Prefer one warm, long-lived process that loops internally**
-(connect to MCP once, then poll every ~2–4 s) over re-launching the harness per
-reply — re-launching pays process-boot + doc-reading + MCP-handshake on every
-turn, which is what makes replies take tens of seconds.
-
-If you must re-invoke per turn, scope each invocation to **answering only** — do
-not re-run the one-time setup or re-read the setup docs just to answer a chat
-turn.
-
-Run the chat loop on a **fast, low-reasoning model** (Haiku / mini / Flash-class)
-with a small token budget — conversational replies do not need heavy reasoning,
-and a reasoning-heavy model spends most of its latency thinking before it
-answers. Keep your strong reasoning model for plan generation
-(**t4l-write-results**), not for chat. See "Model choice" and "Making chat live
-(scheduling)" in `docs/coaching_setup.md`.
+Routing (answer-or-escalate, the structured escalate signal, history digest),
+two-tier ack/escalate mechanics, model split, and loop hosting are all detailed
+in `docs/coaching_setup.md`.
