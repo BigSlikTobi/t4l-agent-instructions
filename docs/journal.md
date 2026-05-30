@@ -5,6 +5,55 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-05-29 — Live in-app chat channel (replaces 3rd-party chat apps)
+
+The athlete now chats with you **inside the T4L app**, not through Slack,
+Telegram, or any other chat app. The self-hosted server relays the conversation;
+you read pending messages and post replies over MCP. The app is just the chat
+surface — your model, skills, and context stay where they run today.
+
+### Two new MCP tools
+
+- `get_pending_chat_messages` — list unanswered athlete messages, oldest first.
+- `write_chat_reply` — post a reply; arguments `content` (non-empty string) and
+  optional `inReplyToSeq` (the `seq` of the message you are answering). Posting
+  marks the answered turn(s) so they are not returned again.
+
+Message fields and the turn lifecycle are documented under "Live chat channel
+shape" in `exchange_contract.md`. Delivery is message-level (one complete reply
+per turn — no token streaming yet). The new `t4l-answer-chat` skill covers the
+answer routine for skills-capable harnesses.
+
+### Answer routine
+
+On each run: call `get_pending_chat_messages`; for each pending message, read
+`get_day_context` (so the reply reflects the live workout in progress — current
+exercise, sets/reps logged), write a short conversational reply, and post it
+with `write_chat_reply(inReplyToSeq=<seq>)`. A chat answer is just
+`write_chat_reply` — only use the `write_*` result tools when the athlete
+actually asks for app-importable output.
+
+### Making it live (important)
+
+A coaching session runs once when invoked and does **not** poll, so on its own
+it only answers chat when you happen to run. To make chat feel live, run the
+answer routine on a short interval on the agent's host — a watch loop or `cron`
+that invokes your harness headless every ~20–30 s with "answer the chat
+channel." Tighten the interval for snappier replies, widen it to cut token cost.
+The routine is safe to run often: answered turns are not returned again, so runs
+never double-reply. See "Making chat live (scheduling)" in `coaching_setup.md`.
+
+### What to do differently starting now
+
+1. Drain the chat backlog whenever you run — do not leave pending messages
+   unanswered.
+2. Schedule the answer routine so the in-app chat is actually live (see above).
+   Without scheduling, the channel only works when you are already running.
+3. Keep chat replies short and conversational; reach for `write_*` result tools
+   only when the athlete asks for app-importable output.
+
+---
+
 ## 2026-05-29 — Agent Skills: portable SKILL.md coaching skills + payload validator
 
 The repo now ships **Agent Skills** under `skills/` — the on-demand procedural

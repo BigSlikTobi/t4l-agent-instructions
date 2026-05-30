@@ -39,8 +39,9 @@ hand.**
 
    If unsure, check your harness docs for "skills directory".
 2. For each skill folder in this repo's `skills/` directory —
-   `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results` — make it
-   available there. Prefer a symlink so `git pull` keeps it current; copy the
+   `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
+   `t4l-answer-chat` — make it available there. Prefer a symlink so `git pull`
+   keeps it current; copy the
    folder if symlinks are unsupported. If you only have remote access to this
    repo, fetch each skill's `SKILL.md` (plus `t4l-write-results/reference/` and
    `scripts/`) and write them into the skills directory.
@@ -98,8 +99,8 @@ When a restart is warranted:
 3. Verify before coaching:
    - the T4L server is still running and reachable at the printed URL,
    - MCP reconnects and `get_day_context` returns,
-   - the skills `t4l-onboard-athlete`, `t4l-coach-daily`, and
-     `t4l-write-results` appear in your catalog.
+   - the skills `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
+     and `t4l-answer-chat` appear in your catalog.
 
    If a skill is missing, re-run "Install Coaching Skills", restart once more,
    then proceed.

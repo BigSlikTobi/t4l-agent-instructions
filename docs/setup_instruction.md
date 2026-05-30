@@ -24,6 +24,8 @@ Read this file first when starting a T4L Trainer agent session.
    - Use memory wiki, training logs, nutrition logs, and HealthKit context.
    - Decide today's coaching action.
    - Write app-consumed results only through MCP tools.
+   - Answer the in-app chat channel (`get_pending_chat_messages` /
+     `write_chat_reply`), and schedule the answer routine so chat stays live.
 
 3. Read `docs/exchange_contract.md` before writing app-consumed JSON
    - Use the current result shapes and mobile display fields.

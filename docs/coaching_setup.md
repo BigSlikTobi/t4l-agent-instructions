@@ -190,6 +190,66 @@ displays the signal, advice, meal suggestion, and meal ideas on the dashboard.
 Do not leave fuel diary submissions without a response — the athlete expects
 coaching feedback after logging their meals.
 
+## Live Chat Channel
+
+The athlete chats with you directly inside the app — this replaces any
+third-party chat app. The self-hosted server relays the conversation; you read
+pending messages and reply through MCP (`get_pending_chat_messages`,
+`write_chat_reply`). See "Live chat channel shape" in
+`docs/exchange_contract.md` for fields and the turn lifecycle.
+
+### Answer routine
+
+Whenever you run, drain the chat backlog:
+
+1. Call `get_pending_chat_messages`. If it returns nothing, there is nothing to
+   answer.
+2. For each pending message, oldest first:
+   - Read `get_day_context` (and `get_profile` / `get_app_snapshot` as needed)
+     so the answer reflects the athlete's real, current state — including the
+     live workout in progress when present (current exercise, sets and reps
+     logged so far). This is what lets you coach mid-set.
+   - Compose a short, conversational reply. This is live chat, not a coaching
+     document: answer the actual question, keep it tight, no boilerplate.
+   - Post it with `write_chat_reply`, passing the message's `seq` as
+     `inReplyToSeq`. That marks the turn answered so it is not returned again.
+3. Only use the result-writing tools (`write_next_day_plan`,
+   `write_training_block_plan`, `write_fuel_guidance`) when the athlete actually
+   asks for app-importable output in the chat. A normal chat answer is just
+   `write_chat_reply`. The "ask before writing app-consumed JSON" rule still
+   applies.
+
+### Making chat live (scheduling)
+
+A coaching session runs once when invoked — it does not poll — so on its own it
+would only answer chat when you happen to run. To make the in-app chat feel
+live, run the answer routine on a short interval on the machine that hosts the
+agent (the same box as the server).
+
+Use whatever non-interactive / headless mode your harness supports, scheduled on
+a short interval. For example, a watch loop that runs an "answer the chat
+channel" prompt every 20–30 seconds:
+
+```bash
+while true; do
+  <your-harness> --headless "Run the t4l chat answer routine: call \
+    get_pending_chat_messages and reply to each via write_chat_reply." \
+    || true
+  sleep 20
+done
+```
+
+or the equivalent as a `cron` entry (1-minute granularity) or a systemd timer.
+Adapt the command to your harness.
+
+- Replies land within roughly one interval. Tighten the interval for snappier
+  chat; widen it to reduce token cost, since each run may read context and call
+  the model.
+- The routine is safe to run frequently: answering a turn marks it `answered`,
+  so overlapping or rapid runs will not double-reply.
+- A live workout is most useful when the interval is short — pick a cadence that
+  matches how quickly the athlete expects a reply mid-session.
+
 ## Output Rules
 
 Keep recommendations concrete and actionable for today. Separate facts from

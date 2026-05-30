@@ -37,6 +37,20 @@ paths.
 The app imports pending results only after user confirmation where needed;
 training blocks always require explicit user import.
 
+## Live chat through MCP
+
+The athlete chats with you directly inside the app — this replaces any
+third-party chat app. The server relays the conversation; you read pending
+messages and post replies through MCP.
+
+- `get_pending_chat_messages`: list unanswered athlete messages. Returns
+  `{ "messages": [ ... ] }`, oldest first.
+- `write_chat_reply`: post a reply. Arguments: `content` (required, non-empty
+  string) and `inReplyToSeq` (optional integer — the `seq` of the message you
+  are answering). Returns `{ "posted": { ...the stored reply... } }`.
+
+See "Live chat channel shape" below for message fields and the turn lifecycle.
+
 ## Delivery and validation
 
 The server validates every write: a `schema` field, when present, must be a
@@ -305,3 +319,42 @@ and the meal photo, if any, with `get_blob_base64`, then echo the request's
   include `assumptions`.
 - `target` is optional. When present, it updates the athlete's daily nutrition
   target, so only include it intentionally.
+
+## Live chat channel shape
+
+The chat is an append-only conversation. Each message is an object:
+
+```json
+{
+  "seq": 1,
+  "conversationId": "default",
+  "role": "user",
+  "content": "How was my long run?",
+  "status": "pending",
+  "createdAt": "2026-05-29T14:21:55+00:00",
+  "updatedAt": "2026-05-29T14:21:55+00:00"
+}
+```
+
+- `seq` (integer): monotonic id and ordering cursor. Strictly increasing.
+- `role`: `"user"` (the athlete) or `"assistant"` (you).
+- `content`: the message text (max 8000 characters per message).
+- `status`: for a user turn, `"pending"` (not yet answered) → `"answered"`.
+  For your reply, `"complete"`.
+
+Turn lifecycle:
+
+1. The athlete posts a message — it is `pending`.
+2. `get_pending_chat_messages` returns every `pending` user turn, oldest first.
+3. You answer with `write_chat_reply`, passing the user turn's `seq` as
+   `inReplyToSeq`. This atomically stores your reply (`complete`) and marks the
+   answered user turn(s) `answered`, so the next `get_pending_chat_messages`
+   will not return them again. Without `inReplyToSeq`, all currently pending
+   user turns are marked answered.
+
+Delivery is message-level: post one complete reply per turn (there is no
+token-by-token streaming yet). The app polls and renders new messages by `seq`.
+Keep replies conversational and concise — this is live chat, not a coaching
+document. Only call the `write_*` result tools (plans, fuel guidance) when the
+athlete actually asks for app-importable output; a normal chat answer is just
+`write_chat_reply`.
