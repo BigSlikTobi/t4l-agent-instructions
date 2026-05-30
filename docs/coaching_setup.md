@@ -305,6 +305,55 @@ This is a harness configuration choice (which model the answer loop invokes),
 not part of the server or the contract, so it stays model-agnostic: "fast model
 for chat, strong model for plans" holds for any vendor.
 
+### Two-tier replies: fast answer, or fast ack then escalate
+
+You may want the fast model to answer simple turns directly and hand heavy turns
+(plan review, multi-day analysis, "optimise my training") to the strong model.
+A good pattern is: ack immediately on the fast model, then post the real answer
+when the strong model finishes. Done wrong, this is the single most common way
+the chat silently breaks, so follow these rules exactly.
+
+**The trap: posting a reply marks the user turn answered.** `write_chat_reply`
+(with `inReplyToSeq`, or without) flips the pending user turn(s) to `answered`.
+So the moment you post an "I need a minute…" ack, `get_pending_chat_messages`
+returns **empty**. If the heavy worker then re-polls the queue to discover "what
+should I answer?", it finds nothing and never posts the real reply — the athlete
+is left with only the ack. This is a real failure that looks like "fast but the
+real answer never comes."
+
+**The rule: carry the question forward in memory; never re-fetch it.** The
+escalation must pass the question text and `seq` to the heavy worker in process,
+not via the pending queue.
+
+```text
+on each pending turn (seq=N, text=Q):
+  if simple:
+     ctx = get_day_context()                      # keep the chat workout-aware
+     write_chat_reply(content=fast_model(Q, ctx), inReplyToSeq=N)
+  else (heavy):
+     write_chat_reply(content="On it — give me a minute. 🧠", inReplyToSeq=N)
+     answer = strong_model(Q, full_context)        # Q passed IN MEMORY, not re-polled
+     write_chat_reply(content=answer)              # fresh turn; do not rely on the queue
+```
+
+Additional rules for the two-tier pattern:
+
+- **Always read `get_day_context` on the fast path too.** A direct fast-model
+  call that skips context makes the chat workout-blind — "how was my run?" gets
+  a generic answer because the model never saw the logged sets/reps. Inject the
+  day context into the fast prompt; it is small and keeps replies fast.
+- **Make the ack distinct from any error/fallback string.** If your loop has a
+  catch-all reply (e.g. a generic greeting), do not reuse it as the heavy-work
+  ack — otherwise a crash and a successful escalation look identical in the chat.
+- **Route safety-relevant turns conservatively.** Pain, injury, dizziness,
+  illness, or "should I push through this?" must not get a breezy fast-model
+  reply — escalate them or answer cautiously. When unsure how to classify a
+  turn, escalate rather than answer fast.
+- **Test the heavy path end to end, not just the fast path.** A fast-path-only
+  test ("simple reply works, pending=0") will pass even when escalation is
+  completely broken. Send one genuinely heavy question and confirm the *real*
+  answer lands after the ack.
+
 ## Output Rules
 
 Keep recommendations concrete and actionable for today. Separate facts from

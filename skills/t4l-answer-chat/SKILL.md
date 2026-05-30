@@ -37,6 +37,27 @@ Payload fields and the turn lifecycle are in `docs/exchange_contract.md`
 - **Safe to run often.** Answering a turn marks it `answered`, so repeated runs
   never double-reply.
 
+## Two-tier replies (fast ack, then escalate)
+
+If you ack a heavy turn on the fast model and hand the real work to a strong
+model, beware the trap: **posting the ack marks the user turn `answered`**, so
+`get_pending_chat_messages` is then empty. The heavy worker must receive the
+question **in memory** — never re-poll the queue for it — and then post the real
+answer as a fresh `write_chat_reply`.
+
+```text
+heavy turn (seq=N, text=Q):
+  write_chat_reply("On it — give me a minute. 🧠", inReplyToSeq=N)
+  answer = strong_model(Q, full_context)   # Q carried in memory, not re-fetched
+  write_chat_reply(answer)                  # fresh reply; queue is already empty
+```
+
+Also: read `get_day_context` on the fast path too (don't go workout-blind), keep
+the ack distinct from any error/fallback string, escalate safety/pain/injury
+turns rather than answering them fast, and test the heavy path end to end — a
+fast-path-only test passes even when escalation is broken. Full detail in
+"Two-tier replies" in `docs/coaching_setup.md`.
+
 ## Liveness and speed
 
 A run answers the backlog once. The chat only feels live if this routine runs on
