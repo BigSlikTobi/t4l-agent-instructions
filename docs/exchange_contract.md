@@ -26,6 +26,18 @@ paths.
 - `get_nutrition_analysis_request`: latest pending meal-analysis request.
 - `get_blob_base64`: read an uploaded meal image. Pass the name from the
   request, e.g. `{ "name": "meal_images/<file>.jpg" }`.
+- `get_recent_chat_messages`: recent chat turns (answered and pending), oldest
+  first, so the planner can see what the athlete actually said in chat. Optional
+  `limit` (default 20, max 200). Distinct from `get_pending_chat_messages`, which
+  returns only unanswered work.
+- `get_coaching_notes`: the standing coaching notes you authored — explicit
+  athlete requests and open questions extracted from chat that should shape
+  planning. Returns the latest notes payload, or `null`.
+- `get_planning_context`: the full planning working set in one call — day
+  context, recent logs, profile, active block, next-day plan, fuel/nutrition,
+  pending requests, coaching notes, and recent chat. Optional `recentChatLimit`
+  (default 20, max 200). Prefer this for daily planning instead of stitching the
+  reads above by hand.
 
 ## Agent results through MCP
 
@@ -36,6 +48,16 @@ paths.
 
 The app imports pending results only after user confirmation where needed;
 training blocks always require explicit user import.
+
+## Agent planning notes through MCP
+
+- `write_coaching_notes`: persist the standing coaching notes (explicit athlete
+  requests, open questions) so the planner sees chat intent it would otherwise
+  miss — the raw chat scrollback is not part of planning context. Argument:
+  `payload` (object). It **replaces** the latest notes, so read the current notes
+  first with `get_coaching_notes`, merge, then write the whole set back. Unlike
+  the result tools, these notes are not consumed by the app — they are context
+  you write for your own future planning runs. See "Coaching notes shape" below.
 
 ## Live chat through MCP
 
@@ -358,3 +380,77 @@ Keep replies conversational and concise — this is live chat, not a coaching
 document. Only call the `write_*` result tools (plans, fuel guidance) when the
 athlete actually asks for app-importable output; a normal chat answer is just
 `write_chat_reply`.
+
+## Coaching notes shape
+
+Coaching notes are your standing, self-authored planning memory: the intent you
+extract from free-text chat that should influence future plans but otherwise
+lives only in the chat log the planner never reads. The server stores them
+verbatim (validation checks only an optional string `schema`), so you own the
+shape. A workable shape:
+
+```json
+{
+  "schema": "coaching_notes.v1",
+  "updatedAt": "2026-05-31T08:00:00Z",
+  "athleteRequests": [
+    {
+      "text": "Move the long run to Saturday going forward.",
+      "sourceSeq": 42,
+      "status": "open",
+      "createdAt": "2026-05-31T07:55:00Z"
+    }
+  ],
+  "openQuestions": [
+    {
+      "text": "Is the left knee still sore after Tuesday's session?",
+      "sourceSeq": 39,
+      "createdAt": "2026-05-30T18:10:00Z"
+    }
+  ],
+  "summary": "Wants weekend long runs and more upper-body volume; watching left knee."
+}
+```
+
+- `athleteRequests`: explicit, plan-relevant asks from chat. Keep `sourceSeq`
+  (the chat `seq` it came from) for traceability. Mark `status` `"addressed"`
+  (or drop the entry) once a written plan reflects it, so it stops nagging.
+- `openQuestions`: things you asked or could not resolve and should follow up on.
+- `summary`: optional rolling one-paragraph digest for fast planner intake.
+
+`write_coaching_notes` replaces the whole object — read with `get_coaching_notes`,
+merge, write back. Record only durable, plan-relevant intent; skip routine
+chit-chat.
+
+## Planning context shape
+
+`get_planning_context` returns one `planning_context.v1` object so daily
+planning is a single read instead of eight. Each artifact slot is the latest
+payload or `null`:
+
+```json
+{
+  "schema": "planning_context.v1",
+  "generatedAt": "2026-05-31T08:00:00+00:00",
+  "dayContext": { },
+  "recentLogs": [ ],
+  "profile": { },
+  "activeBlock": { },
+  "nextDayPlan": { },
+  "fuelGuidance": { },
+  "nutritionAnalysis": { },
+  "pendingRequests": [ ],
+  "coachingNotes": { },
+  "recentChat": [ ]
+}
+```
+
+- `recentLogs` is lifted from `daily_snapshot.recentLogs` (the recent
+  training-log digest source); `coachingNotes` is the standing notes above;
+  `recentChat` is the most recent chat turns (bounded by `recentChatLimit`).
+- The bundle relays artifacts verbatim and performs no interpretation. The
+  interpreted fields the planner cares about (requests, open questions) come from
+  `coachingNotes`, which you author — the server only relays it.
+- The fuller artifacts behind some slots (full app snapshot, individual pending
+  requests) remain available through their dedicated read tools when you need
+  more than the latest payload.

@@ -104,13 +104,19 @@ assumption and ask the user to confirm.
 Use this loop only after the long-term goal and current block target are known.
 If either is missing or unclear, run First-Run Goal Discovery first.
 
-1. Inspect the MCP context before coaching.
+1. Inspect the MCP context before coaching. Call `get_planning_context` for the
+   full working set in one read — day context, recent logs, profile, active
+   block, next workout, fuel/nutrition, pending requests, **coaching notes, and
+   recent chat**. The coaching notes and recent chat are how the athlete's
+   in-app chat intent reaches planning; do not plan without honoring them.
 2. Check whether the current short-term block has reached its review date. If
    it has, review the last block and recommend the next short-term target before
    planning today's work.
-3. Read profile, active block, next workout, latest workout log, recent workout
-   logs, latest nutrition, recent nutrition logs, HealthKit activity summaries,
-   HealthKit activity sessions, and active `memoryWiki`.
+3. From `get_planning_context` you already have profile, active block, next
+   workout, recent logs, and nutrition. Read what it does not bundle — HealthKit
+   activity summaries, HealthKit activity sessions, and active `memoryWiki` —
+   through their own tools, and pull a fuller artifact (e.g. `get_app_snapshot`)
+   when the latest payload is not enough.
 4. Identify facts:
    - long-term goal and current block target.
    - current block length, review date, and success criteria.
@@ -119,6 +125,10 @@ If either is missing or unclear, run First-Run Goal Discovery first.
    - current and recent activity load from HealthKit.
    - nutrition context, yesterday's intake pattern, and bodyweight signal.
    - relevant active memories by category.
+   - explicit athlete requests and open questions from the coaching notes and
+     recent chat. Honor or explicitly address them; once a written plan reflects
+     a request, mark it `addressed` in the notes (`write_coaching_notes`) so it
+     stops resurfacing.
 5. Identify assumptions separately. Stale context, missing HealthKit
    permissions, missing logs, and absent nutrition entries are unknown.
 6. Decide today's training action:
@@ -213,7 +223,18 @@ Whenever you run, drain the chat backlog:
      document: answer the actual question, keep it tight, no boilerplate.
    - Post it with `write_chat_reply`, passing the message's `seq` as
      `inReplyToSeq`. That marks the turn answered so it is not returned again.
-3. Only use the result-writing tools (`write_next_day_plan`,
+3. **After the reply is posted**, if the turn carried durable, plan-relevant
+   intent — an explicit request ("move my long run to Saturday", "I want more
+   upper-body work") or a question you could not fully resolve — record it in the
+   standing coaching notes: `get_coaching_notes`, merge the new item (keep the
+   chat `seq` as `sourceSeq`), then `write_coaching_notes` with the merged set.
+   This is the bridge that carries chat intent into planning — the planner reads
+   these notes, never the raw chat scrollback. Do this **after** replying so it
+   never adds latency to the chat, and only when there is something durable to
+   capture; skip routine chit-chat ("how was my run?", "thanks"). On a fast/heavy
+   split, capture on whichever tier produced the real answer. See "Coaching notes
+   shape" in `docs/exchange_contract.md`.
+4. Only use the result-writing tools (`write_next_day_plan`,
    `write_training_block_plan`, `write_fuel_guidance`) when the athlete actually
    asks for app-importable output in the chat. A normal chat answer is just
    `write_chat_reply`. The "ask before writing app-consumed JSON" rule still
