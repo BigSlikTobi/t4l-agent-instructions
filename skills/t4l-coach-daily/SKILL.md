@@ -11,18 +11,23 @@ from memory alone — MCP context is the source of truth.
 
 ## Loop
 
-1. **Inspect MCP context** before coaching (`get_day_context`, plus
-   `get_app_snapshot` / `get_profile` as needed).
+1. **Inspect MCP context** before coaching. Call `get_planning_context` for the
+   full working set in one read — day context, recent logs, profile, active
+   block, next workout, fuel/nutrition, pending requests, **coaching notes, and
+   recent chat**. Coaching notes + recent chat are how the athlete's in-app chat
+   intent reaches planning — honor them, don't plan around them.
 2. **Check the block review date.** If the current block has reached it, review
    the last block and recommend the next short-term target *before* planning
    today.
-3. **Read everything relevant:** profile, active block, next workout, latest +
-   recent workout logs, latest + recent nutrition, HealthKit activity summaries
-   and sessions, and active `memoryWiki`.
+3. **Read what the bundle does not cover:** HealthKit activity summaries and
+   sessions, and active `memoryWiki`; pull a fuller artifact (`get_app_snapshot`)
+   when a latest payload is not enough.
 4. **Identify facts:** long-term goal and block target; block length, review
    date, success criteria; current week and next workout; recent performance,
    readiness, soreness, set/RPE patterns; activity load; nutrition context,
-   yesterday's intake, bodyweight signal; relevant active memories.
+   yesterday's intake, bodyweight signal; relevant active memories; explicit
+   athlete requests and open questions from coaching notes — mark a request
+   `addressed` (`write_coaching_notes`) once a written plan reflects it.
 5. **Identify assumptions separately.** Stale context, missing HealthKit
    permission, missing logs, and absent nutrition entries are *unknown* — not
    zero. Do not invent missing health data.

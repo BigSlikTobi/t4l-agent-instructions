@@ -26,6 +26,12 @@ Payload fields and the turn lifecycle: `docs/exchange_contract.md`
    - Write a short, direct reply to the actual question.
    - Post with `write_chat_reply`, passing the message's `seq` as `inReplyToSeq`
      — that marks the turn answered so it is not returned again.
+3. **After replying**, if the turn carried durable, plan-relevant intent — an
+   explicit request, or a question you could not resolve — fold it into the
+   standing coaching notes: `get_coaching_notes` → merge (keep the chat `seq` as
+   `sourceSeq`) → `write_coaching_notes`. This is how chat intent reaches the
+   planner, which never sees the raw chat. Do it **after** the reply so it adds
+   no latency, and only when there is something durable — skip chit-chat.
 
 ## How to answer
 
@@ -47,6 +53,10 @@ Payload fields and the turn lifecycle: `docs/exchange_contract.md`
   `write_chat_reply`. Switch to **t4l-write-results** only when the athlete asks
   for app-importable output, and ask before writing app-consumed JSON that
   changes goals, constraints, training direction, or nutrition targets.
+- **Capture durable intent, not chit-chat.** A reply answers the moment; the
+  *plan* needs the intent. Fold explicit requests and open questions into
+  coaching notes (`write_coaching_notes`) so the daily loop acts on them —
+  "how was my run?" or "thanks" needs no note.
 - **Safety first.** Pain, injury, dizziness, illness, or "should I push through
   this?" get a careful, conservative answer (escalate when unsure) — never a
   breezy reply.

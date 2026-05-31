@@ -5,6 +5,37 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-05-31 — Chat intent reaches planning: coaching notes + one-call planning context
+
+Until now, what the athlete said in chat lived only in the `chat_messages` log,
+which the planner never read — so "move my long run to Saturday" or "knee still
+sore" were answered in the moment and then lost to the next plan. Two additions
+close that gap.
+
+**Capture chat intent into standing coaching notes.** After you answer a chat
+turn that carried durable, plan-relevant intent — an explicit request, or a
+question you could not resolve — fold it into the coaching notes:
+`get_coaching_notes` → merge (keep the chat `seq` as `sourceSeq`) →
+`write_coaching_notes`. Do it **after** the reply (no added chat latency) and
+only when there is something durable; skip chit-chat. The broker stores these
+notes verbatim and never interprets chat — the extraction is yours. Shape in
+`exchange_contract.md` ("Coaching notes shape").
+
+**Load the planning working set in one call.** `get_planning_context` returns a
+single `planning_context.v1` object — day context, recent logs, profile, active
+block, next-day plan, fuel/nutrition, pending requests, **coaching notes, and
+recent chat** — so the daily loop is one read instead of eight. Prefer it for
+planning; honor the coaching notes and recent chat there, and mark a request
+`addressed` once a written plan reflects it. A `get_recent_chat_messages` read
+(answered + pending turns) is also available for when you want just the chat.
+
+Requires the t4l-server release that adds these MCP tools
+(`get_recent_chat_messages`, `get_coaching_notes`, `write_coaching_notes`,
+`get_planning_context`). See `coaching_setup.md` (Morning Coaching Loop, Answer
+routine) and the `t4l-coach-daily` / `t4l-answer-chat` skills.
+
+---
+
 ## 2026-05-30 — Chat freshness: snapshot auto-pushes; rebuild the digest per turn
 
 Two changes that keep the in-app coach chat current.

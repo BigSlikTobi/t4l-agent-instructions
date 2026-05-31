@@ -13,6 +13,10 @@
 - Freshness is bounded by the app's last push: a set logged *mid-workout* is not
   on the server until the workout is completed, and `recentLogs` holds only the
   ~10 most recent logs. Treat data outside that window as unavailable.
+- Coaching notes (`get_coaching_notes`, also bundled in `get_planning_context`)
+  are agent-authored, not app-synced: they are current as of the last chat turn
+  you captured into them, not gated by an app push. `get_planning_context` is
+  otherwise only as fresh as its underlying artifacts (same push bound as above).
 - Missing HealthKit, nutrition, or workout fields are unknown, not zero.
 - If context is stale or server sync fails, ask the user to open the app,
   reconnect the server, and push fresh context.
