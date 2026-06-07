@@ -18,7 +18,23 @@ Valid `style`: `rugby`, `boxer`, `hybrid`, `strengthHypertrophy`,
 `conditioning`, `custom`.
 
 Each **workout** must include: `id`, `week`, `day`, `title`, `focus`,
-`rationale`, `conditioning`, and non-empty `exercises`.
+`rationale`, `conditioning`, and either non-empty `items` (preferred for grouped
+or mixed plans) or non-empty `exercises` (simple flat plans only).
+
+Workout structure:
+
+- Use `exercises` only for a simple flat list.
+- Use `items` for supersets/circuits. `items` may contain flat exercise items
+  (`type: "exercise"`) and grouped items.
+- `superset`: exactly 2 child exercises, repeated for `rounds`, alternating
+  A1, B1, A2, B2. Never prescribe all sets of A before B.
+- `circuit`: 3 or more child exercises in sequence, repeated for `rounds`.
+  Use `circuit`, not `circle`; German UI may show `Zirkel`.
+- No nested groups in v1. Groups contain exercises only.
+- In groups, `rounds` is the repeated-execution source of truth; child `sets`
+  may be `1`.
+- `group.restSeconds` applies after the final child in each round. Child
+  `restSeconds` applies between child steps and can be `0`.
 
 Each **exercise** must include: `exerciseId`, `name`, `sets`, `reps`,
 `targetLoad`, `targetRpe`, `restSeconds`, `coachCue`.
@@ -57,6 +73,24 @@ Today screen compact, push long prose to `detailNote`/`media`):
     "cues": ["Tripod foot", "Ribs down", "Drive evenly through both feet"],
     "commonMistakes": ["Losing heel pressure", "Knees collapsing inward"]
   }
+}
+```
+
+```json
+{
+  "items": [
+    {
+      "type": "superset",
+      "groupId": "ss_1",
+      "title": "Superset 1",
+      "rounds": 3,
+      "restSeconds": 90,
+      "exercises": [
+        { "exerciseId": "push_up", "name": "Push-Up", "sets": 1, "reps": "10", "trackingMode": "repsOnly", "targetLoad": "bodyweight", "targetRpe": 7, "restSeconds": 0, "coachCue": "Brace and move as one line." },
+        { "exerciseId": "row", "name": "Row", "sets": 1, "reps": "12", "targetLoad": "moderate", "targetRpe": 7, "restSeconds": 0, "coachCue": "Pull elbows back without shrugging." }
+      ]
+    }
+  ]
 }
 ```
 

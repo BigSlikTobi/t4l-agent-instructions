@@ -5,6 +5,57 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-06-07 — Workout plan groups: supersets and circuits
+
+The app, watch, validator, and `t4l-server` now understand round-based workout
+groups. Use them when the plan needs alternating paired work or a repeated
+sequence; keep simple workouts flat.
+
+**New workout shape.** New grouped plans should put workout entries in
+`items`. Each item is one of:
+
+- `{"type": "exercise", ...exercise fields...}` for a normal exercise.
+- `{"type": "superset", "groupId": "...", "title": "...", "rounds": 3,
+  "restSeconds": 90, "exercises": [exerciseA, exerciseB]}`.
+- `{"type": "circuit", "groupId": "...", "title": "...", "rounds": 2,
+  "restSeconds": 120, "exercises": [exerciseA, exerciseB, exerciseC, ...]}`.
+
+Legacy flat plans with top-level `exercises` are still accepted, but prefer
+`items` for any new plan that contains groups. Do not put groups inside groups
+in v1.
+
+**Semantics are strict.** A superset is exactly 2 exercises alternated by round:
+`A1, B1, A2, B2, A3, B3`. It is not all sets of A followed by all sets of B. A
+circuit is 3+ exercises in sequence, repeated for `rounds`:
+`A1, B1, C1, A2, B2, C2`. Use the JSON term `circuit`; never send `circle`.
+German UI may label it `Zirkel`, but the payload term is always `circuit`.
+
+**Rounds drive execution.** For grouped items, group `rounds` is the source of
+truth for repeated execution. Child exercise fields still carry prescriptions
+for display/logging, but the app expands deterministic execution steps from the
+group. Child `restSeconds` applies between child steps; group `restSeconds`
+applies after a full round.
+
+**Progress contract.** The phone and watch now use execution `stepId`s for
+timers/progress/completion, while logged sets remain keyed by `exerciseId` so
+set history for the same movement carries across rounds. Watch payloads are v2
+and include `executionSteps`; the watch still falls back to legacy flat
+`exercises` if no execution steps are present.
+
+**Validation and server release.** `t4l-server` 0.5.0 accepts grouped
+`training_block_plan` and `next_day_plan` payloads. The write-results validator
+also checks grouped items and will reject malformed supersets/circuits or any
+`circle` type before you write the result. Run it before every result write:
+
+```bash
+python skills/t4l-write-results/scripts/validate_payload.py <kind> payload.json
+```
+
+See `exchange_contract.md` and
+`skills/t4l-write-results/reference/payload-shapes.md` for the full examples.
+
+---
+
 ## 2026-05-31 — Chat intent reaches planning: coaching notes + one-call planning context
 
 Until now, what the athlete said in chat lived only in the `chat_messages` log,

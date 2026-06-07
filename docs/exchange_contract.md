@@ -85,7 +85,8 @@ resend. There is no silent retry, so always send complete, valid payloads. The
 app rejects:
 
 - `training_block_plan`: empty `workouts`, or `durationWeeks` below 1.
-- `next_day_plan`: a workout with no `exercises`.
+- `next_day_plan`: a workout with neither non-empty `items` nor non-empty
+  `exercises`.
 - `nutrition_analysis_result`: `calories` not greater than 0, or a negative
   macro.
 
@@ -122,7 +123,26 @@ Each workout must include:
 - `focus`
 - `rationale`
 - `conditioning`
-- non-empty `exercises`
+- non-empty `items` for grouped/new plans, or non-empty `exercises` for simple
+  flat plans
+
+For workout structure:
+
+- Use `exercises` only when the workout is a simple flat list.
+- Use `items` when the workout contains supersets or circuits. `items` may
+  contain flat exercise items and grouped items.
+- A flat item has `type: "exercise"` plus the normal exercise prescription
+  fields.
+- A superset has `type: "superset"`, exactly 2 child exercises, and `rounds`.
+  It executes A1, B1, A2, B2, etc. Do not write all sets of A before B.
+- A circuit has `type: "circuit"`, 3 or more child exercises, and `rounds`.
+  Use the JSON term `circuit`, never `circle`; German UI may display `Zirkel`.
+- Do not nest groups inside groups in v1.
+- In grouped items, `rounds` is the source of truth for repeated execution.
+  Child `sets` may be `1`; the app displays/logs the child exercises against the
+  group round count.
+- `group.restSeconds` applies after the last child of each round. Child
+  `restSeconds` applies between child steps and can be `0`.
 
 Each exercise must include:
 
@@ -187,6 +207,33 @@ Example exercise:
     "cues": ["Tripod foot", "Ribs down", "Drive evenly through both feet"],
     "commonMistakes": ["Losing heel pressure", "Knees collapsing inward"]
   }
+}
+```
+
+Example grouped workout structure:
+
+```json
+{
+  "id": "w1d2_density",
+  "week": 1,
+  "day": 2,
+  "title": "Upper Density",
+  "focus": "Superset push and pull patterns.",
+  "rationale": "Alternating patterns keeps the session dense without rushing form.",
+  "conditioning": "",
+  "items": [
+    {
+      "type": "superset",
+      "groupId": "ss_1",
+      "title": "Superset 1",
+      "rounds": 3,
+      "restSeconds": 90,
+      "exercises": [
+        { "exerciseId": "push_up", "name": "Push-Up", "sets": 1, "reps": "10", "trackingMode": "repsOnly", "targetLoad": "bodyweight", "targetRpe": 7, "restSeconds": 0, "coachCue": "Brace and move as one line." },
+        { "exerciseId": "row", "name": "Row", "sets": 1, "reps": "12", "targetLoad": "moderate", "targetRpe": 7, "restSeconds": 0, "coachCue": "Pull elbows back without shrugging." }
+      ]
+    }
+  ]
 }
 ```
 

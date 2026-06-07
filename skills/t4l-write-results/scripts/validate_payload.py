@@ -34,10 +34,11 @@ KINDS = (
 VALID_STYLES = {"rugby", "boxer", "hybrid", "strengthHypertrophy", "conditioning", "custom"}
 VALID_TRACKING = {"weightAndReps", "repsOnly", "timeOnly"}
 VALID_SIGNALS = {"green", "hold", "fuel", "deload"}
+GROUP_TYPES = {"superset", "circuit"}
 
 BLOCK_REQUIRED = ["id", "style", "title", "durationWeeks", "currentWeek", "weeklyFocus",
                   "measurableTargets", "workouts", "createdBy", "createdAt"]
-WORKOUT_REQUIRED = ["id", "week", "day", "title", "focus", "rationale", "conditioning", "exercises"]
+WORKOUT_REQUIRED = ["id", "week", "day", "title", "focus", "rationale", "conditioning"]
 EXERCISE_REQUIRED = ["exerciseId", "name", "sets", "reps", "targetLoad", "targetRpe",
                      "restSeconds", "coachCue"]
 
@@ -83,18 +84,54 @@ def validate_exercise(ex, where, r):
         r.warn(f"{where}: timeOnly exercise should set 'targetDurationSeconds'.")
 
 
+def validate_workout_item(item, where, r):
+    if not isinstance(item, dict):
+        r.error(f"{where}: workout item must be an object.")
+        return
+    item_type = item.get("type", "exercise")
+    if item_type in (None, "", "exercise"):
+        validate_exercise(item.get("exercise") if isinstance(item.get("exercise"), dict) else item,
+                          where, r)
+        return
+    if item_type == "circle":
+        r.error(f'{where}: use "circuit", not "circle".')
+        return
+    if item_type not in GROUP_TYPES:
+        r.error(f"{where}: item type must be exercise, superset, or circuit.")
+        return
+
+    exercises = item.get("exercises")
+    if not is_nonempty_list(exercises):
+        r.error(f"{where}: {item_type} must contain child exercises.")
+        return
+    rounds = item.get("rounds")
+    if not is_number(rounds) or rounds < 1:
+        r.error(f"{where}: {item_type} 'rounds' must be a number >= 1.")
+    if item_type == "superset" and len(exercises) != 2:
+        r.error(f"{where}: superset must contain exactly 2 exercises.")
+    if item_type == "circuit" and len(exercises) < 3:
+        r.error(f"{where}: circuit must contain at least 3 exercises.")
+    if not item.get("groupId"):
+        r.warn(f"{where}: grouped item should include stable 'groupId'.")
+    for i, ex in enumerate(exercises):
+        validate_exercise(ex, f"{where} {item_type}.exercise[{i}]", r)
+
+
 def validate_workout(w, where, r):
     if not isinstance(w, dict):
         r.error(f"{where}: workout must be an object.")
         return
     for f in WORKOUT_REQUIRED:
-        if f == "exercises":
-            continue
         if f not in w or w[f] in (None, ""):
             r.warn(f"{where}: workout missing '{f}'.")
+    items = w.get("items")
     exercises = w.get("exercises")
+    if is_nonempty_list(items):
+        for i, item in enumerate(items):
+            validate_workout_item(item, f"{where} item[{i}]", r)
+        return
     if not is_nonempty_list(exercises):
-        r.error(f"{where}: workout has no exercises (app discards this).")
+        r.error(f"{where}: workout has no items/exercises (app discards this).")
         return
     for i, ex in enumerate(exercises):
         validate_exercise(ex, f"{where} exercise[{i}]", r)

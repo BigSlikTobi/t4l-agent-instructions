@@ -22,7 +22,8 @@ resend. So validate before you write.
 ## Hard rules that make the app DISCARD the result
 
 - `training_block_plan`: `workouts` must be non-empty; `durationWeeks` ≥ 1.
-- `next_day_plan`: the `workout` must have non-empty `exercises`.
+- `next_day_plan`: the `workout` must have non-empty `items` or non-empty
+  `exercises`.
 - `nutrition_analysis_result`: `calories` > 0; every macro ≥ 0.
 - `fuel_guidance`: always accepted (but still send a useful, complete payload).
 - Any result: `schema`, if present, must be a non-empty string — or omit it to
@@ -47,10 +48,11 @@ rules" above and `reference/payload-shapes.md`.
 
 Full field-by-field shapes, required fields, valid `style` values, mobile
 display fields (`loadLabel`, `primaryCue`, `detailNote`, `warningCue`),
-`trackingMode` (`weightAndReps` default / `repsOnly` / `timeOnly`), `media`, and
-worked examples are in **`reference/payload-shapes.md`** — read it when
-constructing a payload. Always include `goals` (`longTerm`, `shortTerm`,
-`blockReviewDate`) in `next_day_plan` and `training_block_plan`.
+`trackingMode` (`weightAndReps` default / `repsOnly` / `timeOnly`), `media`,
+supersets/circuits via workout `items`, and worked examples are in
+**`reference/payload-shapes.md`** — read it when constructing a payload. Always
+include `goals` (`longTerm`, `shortTerm`, `blockReviewDate`) in `next_day_plan`
+and `training_block_plan`.
 
 ## Before you write
 
