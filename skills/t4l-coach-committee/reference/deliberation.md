@@ -34,8 +34,9 @@ Apply in order; the first rule that resolves the conflict wins.
    absolute; route around it, never through it.
 2. **Lead coach gets priority.** The coach who owns the current block target
    leads; conflicts between non-safety qualities resolve in the lead's favour.
-   Lead-coach map, keyed on the block `style` enum
-   (`skills/t4l-write-results/reference/payload-shapes.md`):
+   Lead-coach map, keyed on the block `style` enum documented by the
+   **t4l-write-results** skill (`reference/payload-shapes.md` inside that
+   installed skill):
 
    | block `style` | lead coach |
    |---|---|

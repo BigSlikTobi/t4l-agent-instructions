@@ -44,8 +44,9 @@ hand.**
    symlink so `git pull`
    keeps it current; copy the
    folder if symlinks are unsupported. If you only have remote access to this
-   repo, fetch each skill's `SKILL.md` (plus `t4l-write-results/reference/` and
-   `scripts/`) and write them into the skills directory.
+   repo, fetch each whole skill folder, including reference folders and scripts
+   (`t4l-write-results/reference/`, `t4l-write-results/scripts/`, and
+   `t4l-coach-committee/reference/`).
 3. Make it idempotent: if a T4L skill is already present, refresh it rather than
    creating a duplicate.
 4. Skills are scanned at harness **startup**, so a freshly installed skill takes
