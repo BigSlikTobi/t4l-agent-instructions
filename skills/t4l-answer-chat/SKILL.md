@@ -49,6 +49,12 @@ Payload fields and the turn lifecycle: `docs/exchange_contract.md`
 - **An escalation always concludes.** Once the ack is posted the turn leaves the
   pending queue, so you own delivering the result: always `write_chat_reply` the
   reasoning model's answer; if it errors, post a real status, never silence.
+- **Delegate to one specialist lens, never spawn a sub-agent here.** As head
+  coach, route a focused question (nutrition, a single tweak, a pain check) to the
+  one relevant specialist's lens and answer in that voice. This is a *lens choice
+  on the current/fast model* — **not** a `t4l-coach-committee` convene or a
+  sub-agent spawn, which would break the fast loop. Escalate to the committee only
+  if the question actually re-shapes the plan, and never on the fast chat path.
 - **Don't write plans from a casual question.** A chat answer is just
   `write_chat_reply`. Switch to **t4l-write-results** only when the athlete asks
   for app-importable output, and ask before writing app-consumed JSON that

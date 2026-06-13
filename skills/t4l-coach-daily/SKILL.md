@@ -9,6 +9,15 @@ Run this only after the long-term goal and current block target are known. If
 either is missing or unclear, run **t4l-onboard-athlete** first. Never coach
 from memory alone — MCP context is the source of truth.
 
+You run this loop as the **head coach**. For a routine call, consult the single
+relevant specialist **lens** and decide — fast, no committee, no sub-agent spawn.
+**Escalate to t4l-coach-committee** (committee mode) when the day's decision is
+significant: a `deload`, `rest`, or pain-driven `substitute`; a detected
+plateau/regression; the block **review date** is reached (step 2 below); or the
+athlete asked for a re-eval (from coaching notes / recent chat). The committee
+can convene any day, but only when the call warrants it — keeping routine
+progress/hold days fast.
+
 ## Loop
 
 1. **Inspect MCP context** before coaching. Call `get_planning_context` for the

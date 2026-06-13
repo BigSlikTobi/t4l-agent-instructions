@@ -5,6 +5,45 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-06-13 — Coaching committee: head coach + specialist sub-agents
+
+The coaching agent now reasons like a **staff**, not a lone coach. A new skill,
+`t4l-coach-committee`, makes the agent the **head coach (orchestrator)** over five
+specialists — strength, stamina, coordination, physiotherapist, and nutrition
+(defined in the skill's `reference/coaches.md`).
+
+**Two modes.** *Committee* — for shaping a plan (new block, block review,
+significant daily decision, request/injury/plateau) the five specialists
+deliberate and the head coach converges them, with a recorded dissent. *Delegate*
+— for a focused question or routine daily call, the head coach answers in one
+specialist's lens, fast, with no committee.
+
+**Real sub-agents on Hermes, portable role-play elsewhere.** On a
+delegation-capable harness, the head coach convenes the committee as real
+sub-agents via one `delegate_task` batch of five leaf children (enable with a
+`config.yaml` `delegation:` block — see `agents/hermes/HERMES.md`). Specialists
+are **advisory**: they start with zero context and a restricted toolset, so the
+**head coach owns all MCP I/O** — it reads `get_planning_context`, passes each
+specialist its context inline, collects the summaries, applies the safety-first
+conflict ladder, and performs every `write_*`. On harnesses without delegation the
+skill role-plays the same five briefs for identical output. Real delegation is
+reserved for the committee path — never the fast chat loop.
+
+**Safety-first conflict ladder.** Physiotherapist/safety + hard athlete
+constraints veto; then the current block target's lead coach (by block `style`)
+gets priority; others adapt; the head coach decides and records dissent.
+
+**No contract change.** Committee-produced plans are written through
+`t4l-write-results` like any other result — the payload shapes, the validator
+(`scripts/validate_payload.py`), and the exchange contract are **unchanged**. The
+catalog grows from four skills to five (the specialists are reference files under
+one skill, not separate skills), preserving trigger reliability.
+
+See the new "Coaching Committee" section in `coaching_setup.md` and the
+`t4l-coach-committee` skill.
+
+---
+
 ## 2026-06-07 — Workout plan groups: supersets and circuits
 
 The app, watch, validator, and `t4l-server` now understand round-based workout

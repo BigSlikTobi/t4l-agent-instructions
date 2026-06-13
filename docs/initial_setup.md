@@ -40,17 +40,24 @@ hand.**
    If unsure, check your harness docs for "skills directory".
 2. For each skill folder in this repo's `skills/` directory —
    `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
-   `t4l-answer-chat` — make it available there. Prefer a symlink so `git pull`
+   `t4l-answer-chat`, `t4l-coach-committee` — make it available there. Prefer a
+   symlink so `git pull`
    keeps it current; copy the
    folder if symlinks are unsupported. If you only have remote access to this
-   repo, fetch each skill's `SKILL.md` (plus `t4l-write-results/reference/` and
-   `scripts/`) and write them into the skills directory.
+   repo, fetch each whole skill folder, including reference folders and scripts
+   (`t4l-write-results/reference/`, `t4l-write-results/scripts/`, and
+   `t4l-coach-committee/reference/`).
 3. Make it idempotent: if a T4L skill is already present, refresh it rather than
    creating a duplicate.
 4. Skills are scanned at harness **startup**, so a freshly installed skill takes
    effect from your **next** session. Reload or restart the harness if it
    supports that. For this first session, keep following these docs directly —
    they are the source the skills were built from.
+
+**Hermes only: enable delegation.** So the head coach can convene the specialist
+coaches as real sub-agents, ensure your Hermes `config.yaml` carries the
+`delegation:` block (see `agents/hermes/HERMES.md`). Without it, `t4l-coach-committee`
+falls back to single-agent role-play of the same coaches — identical output.
 
 If your harness does not support skills, skip this section. The `docs/` workflow
 works exactly as before.
@@ -100,7 +107,7 @@ When a restart is warranted:
    - the T4L server is still running and reachable at the printed URL,
    - MCP reconnects and `get_day_context` returns,
    - the skills `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
-     and `t4l-answer-chat` appear in your catalog.
+     `t4l-answer-chat`, and `t4l-coach-committee` appear in your catalog.
 
    If a skill is missing, re-run "Install Coaching Skills", restart once more,
    then proceed.
