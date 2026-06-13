@@ -16,6 +16,7 @@ only judges relevance from each skill's `description`.
 | [`t4l-coach-daily`](t4l-coach-daily/SKILL.md) | starting a daily coaching session — turns MCP context into today's training decision + nutrition guidance |
 | [`t4l-write-results`](t4l-write-results/SKILL.md) | about to write any app result via MCP — gives payload shapes + a validator so the app won't discard the result |
 | [`t4l-answer-chat`](t4l-answer-chat/SKILL.md) | the athlete has sent in-app chat messages — drains pending chat via MCP and posts short, workout-aware replies |
+| [`t4l-coach-committee`](t4l-coach-committee/SKILL.md) | shaping a training plan or routing a focused question — the head coach convenes the five specialist coaches or delegates to one |
 
 The one-time server/MCP bootstrap (`docs/initial_setup.md`) is intentionally
 **not** a skill — it's environment setup, not a model capability.
@@ -30,8 +31,11 @@ Kept to the lowest common denominator so one `SKILL.md` runs everywhere:
 - **Descriptions ≤200 chars** (the strictest cap, claude.ai) and start with an
   explicit "Use when…" trigger, because activation is the model's judgment, not
   deterministic matching — weaker / open-weight models need the help.
-- **Small catalog (4 skills).** Trigger reliability degrades as the catalog
-  grows.
+- **Small catalog (5 skills).** Trigger reliability degrades as the catalog
+  grows. The five specialist coaches in `t4l-coach-committee` deliberately live as
+  **reference files** under that one skill (used as `delegate_task` context on a
+  delegation-capable harness like Hermes, or as role-play lenses elsewhere) — not
+  as separate skills — so the head coach adds one entry, not six.
 - **Bundled scripts are optional.** `t4l-write-results` ships a dependency-free
   Python validator (`scripts/validate_payload.py`); a harness without code
   execution can hand-check against the documented rules instead.
@@ -54,6 +58,7 @@ ln -s "$PWD/skills/t4l-onboard-athlete" ~/.claude/skills/t4l-onboard-athlete
 ln -s "$PWD/skills/t4l-coach-daily"     ~/.claude/skills/t4l-coach-daily
 ln -s "$PWD/skills/t4l-write-results"   ~/.claude/skills/t4l-write-results
 ln -s "$PWD/skills/t4l-answer-chat"     ~/.claude/skills/t4l-answer-chat
+ln -s "$PWD/skills/t4l-coach-committee" ~/.claude/skills/t4l-coach-committee
 
 # Or use the cross-harness installer (Gemini CLI, Codex, OpenCode, Cursor, …):
 npx skills install <this-repo-url>

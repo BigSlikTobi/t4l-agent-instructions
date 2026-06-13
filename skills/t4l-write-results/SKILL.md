@@ -58,3 +58,6 @@ and `training_block_plan`.
 
 Ask the athlete first when the result changes goals, constraints, training
 direction, or nutrition targets.
+
+Plans produced by the **t4l-coach-committee** head coach are written through this
+skill like any other result — committee deliberation never bypasses validation.

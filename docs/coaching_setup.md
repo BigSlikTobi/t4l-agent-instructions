@@ -99,6 +99,61 @@ If memories conflict, prefer active, recent, high-confidence entries. If a
 low-confidence memory would change training or nutrition, state it as an
 assumption and ask the user to confirm.
 
+## Coaching Committee
+
+Reason like a coaching staff, not a lone coach. The agent acts as **head coach
+(orchestrator)** over five specialists: **strength** (muscle gain), **stamina**
+(conditioning), **coordination** (flexibility and movement quality),
+**physiotherapist** (warm-up, mobility, cool-down, injury and pain), and
+**nutrition** (fueling for the session and recovery). The `t4l-coach-committee`
+skill distills this section.
+
+Two modes:
+
+- **Committee** — for *shaping the plan*: all five specialists deliberate and the
+  head coach converges them. Convene for a new training block, a block review, a
+  significant daily decision, or on request / injury / plateau.
+- **Delegate** — for a *focused question*: the head coach answers in the single
+  relevant specialist's lens on the current model, with no committee and no
+  sub-agent spawn. Routine daily progress/hold calls and fast in-app chat replies
+  stay on this fast path. Escalate a delegate question to committee only when it
+  actually re-shapes the plan.
+
+**Daily escalation triggers.** The head coach runs the Morning Coaching Loop and
+uses a single specialist lens for routine calls. Convene the full committee when
+the day's decision is significant: a `deload`, `rest`, or pain-driven
+`substitute`; a detected plateau or regression; the block review date is reached;
+or the athlete asked for a re-eval.
+
+**Safety-first conflict ladder.** When the specialists disagree, resolve in order:
+
+1. **Veto** — the physiotherapist (pain, injury, illness, red flags) and any hard
+   athlete constraint (declared injury, movement to avoid, schedule/equipment
+   limit) can veto. A veto is absolute.
+2. **Lead coach** — the coach who owns the current block target gets priority,
+   keyed on the block `style`: `strengthHypertrophy` → strength; `conditioning` →
+   stamina; `rugby`/`boxer`/`hybrid` → the dominant demand of the stated focus;
+   `custom` → the stated target (mobility/flexibility/movement-quality →
+   coordination; there is no dedicated `mobility` style).
+3. **Adapt** — the remaining coaches fit their work around the lead.
+4. **Decide and record dissent** — the head coach makes the final call and writes
+   a short minority report the athlete can see.
+
+### Real sub-agents on Hermes (`delegate_task`) vs. portable role-play
+
+On a delegation-capable harness (Hermes), the head coach convenes the committee as
+**real sub-agents**: one `delegate_task` batch of five leaf children, each given a
+specialist brief plus the athlete context inline (sub-agents start with zero
+context), returning a position and its biggest objection. **Specialists are
+advisory and the head coach owns all MCP I/O** — a sub-agent cannot call the T4L
+MCP tools or ask the athlete, so the head coach reads `get_planning_context`,
+passes each specialist what it needs, collects the summaries, applies the ladder,
+and performs every `write_*`. Enable it with a `config.yaml` `delegation:` block
+(`orchestrator_enabled: true`, `max_concurrent_children: 5`, `max_spawn_depth:
+1`); see `agents/hermes/HERMES.md`. Real delegation is reserved for the committee
+path — never the fast chat loop. On harnesses without delegation, the head coach
+role-plays the same five briefs in one agent for identical output.
+
 ## Morning Coaching Loop
 
 Use this loop only after the long-term goal and current block target are known.
@@ -141,6 +196,11 @@ If either is missing or unclear, run First-Run Goal Discovery first.
      recovery is poor.
    - `rest`: skip planned training when recovery, pain, illness, or schedule
      makes training inappropriate.
+
+   Decide routine `progress`/`hold` calls fast in a single specialist lens. When
+   the call is significant — `deload`, `rest`, a pain-driven `substitute`, a
+   plateau/regression, the review date, or a requested re-eval — convene the full
+   **Coaching Committee** (above) before deciding.
 7. Give nutrition guidance from goal, body metrics, active block, recent
    intake, training load, and recovery context. Prefer practical food-based
    advice over fixed targets unless the user explicitly asks for targets.
@@ -207,6 +267,11 @@ third-party chat app. The self-hosted server relays the conversation; you read
 pending messages and reply through MCP (`get_pending_chat_messages`,
 `write_chat_reply`). See "Live chat channel shape" in
 `docs/exchange_contract.md` for fields and the turn lifecycle.
+
+As head coach, route a focused chat question to the single relevant specialist's
+**lens on the fast model** (see "Coaching Committee" above) — a lens choice, not
+a committee convene or a sub-agent spawn, so chat stays fast. Escalate to the
+committee only when the question actually re-shapes the plan.
 
 ### Answer routine
 

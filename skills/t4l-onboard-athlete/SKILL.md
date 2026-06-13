@@ -60,6 +60,8 @@ silently continue the old target without reviewing it.
 
 ## Next
 
-Once the goal and block target are set, use the **t4l-coach-daily** skill for
-the daily decision loop. When you produce app-importable JSON, use
-**t4l-write-results**.
+Once the goal and block target are set, design the **first training block** with
+**t4l-coach-committee** (committee mode) — the head coach convenes the specialist
+coaches to shape the block rather than drafting it from a single perspective.
+After the block exists, use the **t4l-coach-daily** skill for the daily decision
+loop. When you produce app-importable JSON, use **t4l-write-results**.
