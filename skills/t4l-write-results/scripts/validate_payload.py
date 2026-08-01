@@ -8,20 +8,22 @@ payload BEFORE calling write_training_block_plan / write_next_day_plan /
 write_fuel_guidance / write_nutrition_analysis_result.
 
 Usage:
-    python validate_payload.py <kind> path/to/payload.json
+    python validate_payload.py <kind> path/to/payload.json [--recent-context context.json]
     cat payload.json | python validate_payload.py <kind>
 
 <kind>: training_block_plan | next_day_plan | fuel_guidance | nutrition_analysis_result
 
 ERROR lines = the app WILL discard this payload. Fix all of them.
-WARN  lines = contract fields missing/odd but not fatal.
+WARN  lines = contract or coaching-quality concerns that need review but are not fatal.
 
 Exit code: 1 on any ERROR (or bad input), else 0.
 Standard library only — no dependencies.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import re
 import sys
 
 KINDS = (
@@ -35,6 +37,15 @@ VALID_STYLES = {"rugby", "boxer", "hybrid", "strengthHypertrophy", "conditioning
 VALID_TRACKING = {"weightAndReps", "repsOnly", "timeOnly"}
 VALID_SIGNALS = {"green", "hold", "fuel", "deload"}
 GROUP_TYPES = {"superset", "circuit"}
+REUSED_COPY_FIELDS = {
+    "dailyMotto": "daily motto",
+    "headline": "summary headline",
+    "highlights": "summary highlight",
+    "tips": "summary tip",
+    "todayAdvice": "fuel advice",
+    "yesterdayRead": "fuel recap",
+    "signalSub": "fuel signal copy",
+}
 
 BLOCK_REQUIRED = ["id", "style", "title", "durationWeeks", "currentWeek", "weeklyFocus",
                   "measurableTargets", "workouts", "createdBy", "createdAt"]
@@ -209,6 +220,193 @@ def validate_nutrition_analysis_result(payload, r):
         r.warn("nutrition_analysis_result should echo the request's 'requestId'.")
 
 
+def normalize_text(value):
+    if not isinstance(value, str):
+        return ""
+    return re.sub(r"\s+", " ", value.strip().casefold())
+
+
+def exercise_identity(ex):
+    if not isinstance(ex, dict):
+        return ""
+    return normalize_text(ex.get("exerciseId") or ex.get("name"))
+
+
+def exercise_signature(ex, include_prescription):
+    identity = exercise_identity(ex)
+    if not include_prescription:
+        return ("exercise", identity)
+    return (
+        "exercise",
+        identity,
+        ex.get("sets"),
+        normalize_text(str(ex.get("reps", ""))),
+        normalize_text(str(ex.get("targetLoad", ""))),
+        ex.get("targetRpe"),
+        ex.get("restSeconds"),
+        ex.get("trackingMode"),
+        ex.get("targetDurationSeconds"),
+    )
+
+
+def workout_signature(workout, include_prescription):
+    if not isinstance(workout, dict):
+        return ()
+    signature = []
+    items = workout.get("items")
+    if is_nonempty_list(items):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type", "exercise") or "exercise"
+            if item_type in GROUP_TYPES:
+                group = ["group", item_type]
+                if include_prescription:
+                    group.extend((item.get("rounds"), item.get("restSeconds")))
+                signature.append(tuple(group))
+                for ex in item.get("exercises", []):
+                    signature.append(exercise_signature(ex, include_prescription))
+            else:
+                ex = item.get("exercise") if isinstance(item.get("exercise"), dict) else item
+                signature.append(exercise_signature(ex, include_prescription))
+        return tuple(signature)
+    for ex in workout.get("exercises", []):
+        signature.append(exercise_signature(ex, include_prescription))
+    return tuple(signature)
+
+
+def looks_like_workout(value):
+    if not isinstance(value, dict) or value.get("type") in GROUP_TYPES:
+        return False
+    if is_nonempty_list(value.get("items")):
+        return True
+    return is_nonempty_list(value.get("exercises")) and any(
+        key in value for key in ("id", "title", "focus", "conditioning", "week", "day", "date")
+    )
+
+
+def find_workouts(value):
+    found = []
+
+    def visit(node):
+        if isinstance(node, dict):
+            if looks_like_workout(node):
+                found.append(node)
+                return
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(value)
+    return found
+
+
+def candidate_workouts(kind, payload):
+    if kind == "training_block_plan":
+        block = payload.get("block") if isinstance(payload.get("block"), dict) else payload
+        return block.get("workouts", []) if isinstance(block.get("workouts"), list) else []
+    if kind == "next_day_plan" and isinstance(payload.get("workout"), dict):
+        return [payload["workout"]]
+    return []
+
+
+def collect_keyed_text(value, key, output):
+    if isinstance(value, dict):
+        for child_key, child in value.items():
+            if child_key == key:
+                if isinstance(child, str):
+                    text = normalize_text(child)
+                    if text:
+                        output.add(text)
+                elif isinstance(child, list):
+                    output.update(normalize_text(item) for item in child if normalize_text(item))
+            collect_keyed_text(child, key, output)
+    elif isinstance(value, list):
+        for child in value:
+            collect_keyed_text(child, key, output)
+
+
+def collect_meal_names(value, output):
+    if isinstance(value, dict):
+        suggestion = value.get("mealSuggestion")
+        if isinstance(suggestion, dict):
+            name = normalize_text(suggestion.get("name"))
+            if name:
+                output.add(name)
+        ideas = value.get("mealIdeas")
+        if isinstance(ideas, list):
+            for idea in ideas:
+                if isinstance(idea, dict):
+                    name = normalize_text(idea.get("name"))
+                    if name:
+                        output.add(name)
+        for child in value.values():
+            collect_meal_names(child, output)
+    elif isinstance(value, list):
+        for child in value:
+            collect_meal_names(child, output)
+
+
+def validate_recent_comparison(kind, payload, recent_context, r):
+    """Warn about obvious stale repeats. Human judgment still owns safe novelty."""
+    candidates = candidate_workouts(kind, payload)
+    recent_workouts = find_workouts(recent_context)
+
+    for index, workout in enumerate(candidates):
+        label = workout.get("title") or workout.get("id") or f"workout[{index}]"
+        exact = workout_signature(workout, include_prescription=True)
+        sequence = workout_signature(workout, include_prescription=False)
+        if exact and any(exact == workout_signature(old, True) for old in recent_workouts):
+            r.warn(
+                f"{label!r} matches a recent exercise order and prescription; "
+                "confirm this is a deliberate repeat and explain the reason/metric in rationale."
+            )
+        elif sequence and any(sequence == workout_signature(old, False) for old in recent_workouts):
+            r.warn(
+                f"{label!r} repeats a recent exercise order; confirm the changed prescription "
+                "is meaningful progression or add one safe fresh element."
+            )
+
+    for left in range(len(candidates)):
+        for right in range(left + 1, len(candidates)):
+            left_sig = workout_signature(candidates[left], include_prescription=True)
+            right_sig = workout_signature(candidates[right], include_prescription=True)
+            if left_sig and left_sig == right_sig:
+                r.warn(
+                    f"candidate workouts {left} and {right} use the same exercise order and "
+                    "prescription; confirm the duplicate is deliberate."
+                )
+
+    recent_titles = {
+        normalize_text(workout.get("title")) for workout in recent_workouts
+        if normalize_text(workout.get("title"))
+    }
+    for workout in candidates:
+        title = normalize_text(workout.get("title"))
+        if title and title in recent_titles:
+            r.warn(f"workout title {workout.get('title')!r} was used recently; make today's title current.")
+
+    for field, label in REUSED_COPY_FIELDS.items():
+        recent_values = set()
+        candidate_values = set()
+        collect_keyed_text(recent_context, field, recent_values)
+        collect_keyed_text(payload, field, candidate_values)
+        if candidate_values & recent_values:
+            r.warn(f"candidate reuses recent {label} word for word; tie the copy to today's context.")
+
+    recent_meals = set()
+    candidate_meals = set()
+    collect_meal_names(recent_context, recent_meals)
+    collect_meal_names(payload, candidate_meals)
+    if candidate_meals & recent_meals:
+        r.warn(
+            "candidate repeats a recent meal suggestion; keep it only when it is a preferred "
+            "routine and make today's timing, portion, or reason specific."
+        )
+
+
 VALIDATORS = {
     "training_block_plan": validate_training_block_plan,
     "next_day_plan": validate_next_day_plan,
@@ -218,17 +416,22 @@ VALIDATORS = {
 
 
 def main(argv):
-    if len(argv) < 2 or argv[1] not in KINDS:
-        sys.stderr.write("usage: validate_payload.py <" + " | ".join(KINDS) + "> [payload.json]\n")
-        return 2
-    kind = argv[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("kind", choices=KINDS)
+    parser.add_argument("payload", nargs="?", help="candidate JSON file; omit to read stdin")
+    parser.add_argument(
+        "--recent-context",
+        help="optional fresh planning-context JSON used for coaching-quality repeat checks",
+    )
+    args = parser.parse_args(argv[1:])
+    kind = args.kind
 
-    if len(argv) >= 3:
+    if args.payload:
         try:
-            with open(argv[2], "r", encoding="utf-8") as fh:
+            with open(args.payload, "r", encoding="utf-8") as fh:
                 raw = fh.read()
         except OSError as e:
-            sys.stderr.write(f"ERROR: cannot read {argv[2]}: {e}\n")
+            sys.stderr.write(f"ERROR: cannot read {args.payload}: {e}\n")
             return 1
     else:
         raw = sys.stdin.read()
@@ -245,6 +448,18 @@ def main(argv):
     r = Report()
     check_schema(payload, r)
     VALIDATORS[kind](payload, r)
+
+    if args.recent_context:
+        try:
+            with open(args.recent_context, "r", encoding="utf-8") as fh:
+                recent_context = json.load(fh)
+        except (OSError, json.JSONDecodeError) as e:
+            sys.stderr.write(f"ERROR: cannot read recent context {args.recent_context}: {e}\n")
+            return 1
+        if not isinstance(recent_context, (dict, list)):
+            sys.stderr.write("ERROR: recent context must be a JSON object or list.\n")
+            return 1
+        validate_recent_comparison(kind, payload, recent_context, r)
 
     for w in r.warns:
         print(f"WARN:  {w}")

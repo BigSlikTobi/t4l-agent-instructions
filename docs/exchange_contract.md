@@ -52,12 +52,12 @@ training blocks always require explicit user import.
 ## Agent planning notes through MCP
 
 - `write_coaching_notes`: persist the standing coaching notes (explicit athlete
-  requests, open questions) so the planner sees chat intent it would otherwise
-  miss — the raw chat scrollback is not part of planning context. Argument:
-  `payload` (object). It **replaces** the latest notes, so read the current notes
-  first with `get_coaching_notes`, merge, then write the whole set back. Unlike
-  the result tools, these notes are not consumed by the app — they are context
-  you write for your own future planning runs. See "Coaching notes shape" below.
+  requests, open questions) so important chat intent survives after the bounded
+  `recentChat` window rolls forward. Argument: `payload` (object). It
+  **replaces** the latest notes, so read the current notes first with
+  `get_coaching_notes`, merge, then write the whole set back. Unlike the result
+  tools, these notes are not consumed by the app — they are context you write
+  for your own future planning runs. See "Coaching notes shape" below.
 
 ## Live chat through MCP
 
@@ -92,6 +92,40 @@ app rejects:
 
 `fuel_guidance` is always accepted. If a result is rejected, fix the payload and
 write it again.
+
+## Coaching-quality preflight
+
+Schema-valid is not the same as good coaching. Before writing a
+`training_block_plan` or `next_day_plan`, compare the candidate with the fresh
+`get_planning_context` bundle:
+
+- `recentLogs`: recent exercise exposure, prescriptions, order, and completed
+  training;
+- `activeBlock`: the intent, anchors, and planned progression to retain;
+- `nextDayPlan`: the prior generated session and recent app-facing copy;
+- `coachingNotes` and `recentChat`: explicit constraints, requests, and variety
+  preferences.
+
+Keep block intent, primary anchors, progression, recovery, injury constraints,
+equipment, schedule, and athlete preferences. On a normal training day, add at
+least one meaningful fresh element when safe: a log-backed progression
+challenge; one or two pattern-matched accessories; a format, sequence, tempo,
+or density change; or a small goal-relevant skill/conditioning element. Do not
+pair an unfamiliar element with a large increase in another stress lever.
+
+Do not repeat the same exercise order and prescription from a recent
+same-purpose session unless it is a deliberate benchmark, technique, rehab,
+taper, or recovery repeat. Put a short explanation in the workout `rationale`:
+what remains anchored, what is fresh, and why it fits today. If repetition is
+deliberate, name the reason and metric being retested.
+
+Compare app-facing wording too. Do not reuse a recent workout title,
+`dailyMotto`, opening, summary, or fuel-advice sentence word for word. New words
+alone do not make a stale session novel, and exact safety/form cues may repeat
+when consistent wording protects the athlete. Rotate meal ideas only within
+known food and digestion preferences; a preferred routine meal may stay when
+its timing, portion, or reason is current. These are coaching-quality rules;
+they do not add new required JSON fields.
 
 ## Training block plan shape
 
@@ -288,7 +322,7 @@ workout object and optional coaching context.
       "Keep RPE under 8 on pressing movements"
     ]
   },
-  "dailyMotto": "Consistency beats intensity.",
+  "dailyMotto": "Smooth reps build the next five kilos.",
   "goals": {
     "longTerm": "Build strength while staying athletic",
     "shortTerm": "Increase bench press 1RM by 5 kg",
@@ -305,7 +339,8 @@ corresponding UI element.
   - `headline` (string): one-line performance summary.
   - `highlights` (array of strings): 2-4 notable observations.
   - `tips` (array of strings): 1-3 things to watch out for today.
-- `dailyMotto` (optional, string): short motivational phrase for the day.
+- `dailyMotto` (optional, string): short motivational phrase for the day. Tie it
+  to current context and do not reuse a recent motto word for word.
 - `goals` (optional, object): current goal context.
   - `longTerm` (string): the athlete's long-term goal.
   - `shortTerm` (string): the current block's short-term target.
@@ -329,7 +364,7 @@ asks for nutrition recommendations.
   "signal": "green",
   "signalLabel": "Gut versorgt",
   "signalSub": "Gute Basis für das heutige Training",
-  "todayAdvice": "Focus on carbs before and protein after your leg session today.",
+  "todayAdvice": "Your 18:00 leg session needs an earlier carb base: add rice or oats at lunch, then 25-35 g protein after.",
   "mealSuggestion": {
     "name": "Oatmeal with banana and whey",
     "rationale": "Quick carbs + protein 90 min before training",
@@ -430,11 +465,11 @@ athlete actually asks for app-importable output; a normal chat answer is just
 
 ## Coaching notes shape
 
-Coaching notes are your standing, self-authored planning memory: the intent you
-extract from free-text chat that should influence future plans but otherwise
-lives only in the chat log the planner never reads. The server stores them
-verbatim (validation checks only an optional string `schema`), so you own the
-shape. A workable shape:
+Coaching notes are your standing, self-authored planning memory: durable intent
+extracted from free-text chat that should influence future plans even after the
+bounded recent-chat window rolls forward. The server stores them verbatim
+(validation checks only an optional string `schema`), so you own the shape. A
+workable shape:
 
 ```json
 {
@@ -495,9 +530,13 @@ payload or `null`:
 - `recentLogs` is lifted from `daily_snapshot.recentLogs` (the recent
   training-log digest source); `coachingNotes` is the standing notes above;
   `recentChat` is the most recent chat turns (bounded by `recentChatLimit`).
-- The bundle relays artifacts verbatim and performs no interpretation. The
-  interpreted fields the planner cares about (requests, open questions) come from
-  `coachingNotes`, which you author — the server only relays it.
+- For plan generation, treat `recentLogs`, `activeBlock`, `nextDayPlan`,
+  `coachingNotes`, and `recentChat` as the recent-comparison window. Read the
+  bundle immediately before planning; do not cache a variety decision across
+  days. If that window is missing, novelty is unknown rather than proven.
+- The bundle relays artifacts verbatim and performs no interpretation. Durable,
+  interpreted requests and open questions come from `coachingNotes`, which you
+  author; `recentChat` remains a bounded raw context window.
 - The fuller artifacts behind some slots (full app snapshot, individual pending
   requests) remain available through their dedicated read tools when you need
   more than the latest payload.

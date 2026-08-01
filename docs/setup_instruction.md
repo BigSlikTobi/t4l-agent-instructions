@@ -22,6 +22,8 @@ Read this file first when starting a T4L Trainer agent session.
    - Run first-run goal discovery when needed.
    - Establish the Coaching Contract.
    - Use memory wiki, training logs, nutrition logs, and HealthKit context.
+   - Compare the candidate session and coaching copy with recent context; keep
+     progression anchors stable while adding safe, useful variety.
    - Decide today's coaching action.
    - Write app-consumed results only through MCP tools.
    - Answer the in-app chat channel (`get_pending_chat_messages` /

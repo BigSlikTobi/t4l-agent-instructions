@@ -76,6 +76,11 @@ Inspect the available context before coaching:
 - active `memoryWiki` entries.
 - pending requests such as training block, fuel guidance, or nutrition analysis.
 
+For daily planning, the source of truth also supplies the comparison window.
+Use recent logs, the accepted block, the prior next-day plan, coaching notes,
+and recent chat to check whether today's session or wording is a stale repeat.
+Do not decide that a plan is fresh from the current-day context alone.
+
 Missing files, missing metrics, missing HealthKit permissions, or absent logs
 are unknown, not zero. If `day_context` is missing or stale, ask the user to
 open the app and push fresh context before coaching.

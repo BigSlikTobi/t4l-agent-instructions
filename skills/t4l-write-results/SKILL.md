@@ -40,9 +40,45 @@ python scripts/validate_payload.py <kind> path/to/payload.json
 ```
 
 It prints `ERROR:` for anything the app would discard (exit code 1) and `WARN:`
-for contract fields that are missing but not fatal. Fix every ERROR, then call
-the matching MCP write tool. No Python available? Hand-check against the "Hard
-rules" above and `reference/payload-shapes.md`.
+for contract or coaching-quality concerns that need review but are not fatal.
+Fix every ERROR, then call the matching MCP write tool. No Python available?
+Hand-check against the "Hard rules" above and `reference/payload-shapes.md`.
+
+For a training plan, also pass the fresh planning context when it is available:
+
+```bash
+python scripts/validate_payload.py next_day_plan plan.json \
+  --recent-context planning-context.json
+```
+
+This optional check warns on an identical recent workout, a repeated exercise
+order, reused title/summary/fuel copy, or a repeated meal suggestion. A warning
+is a review point, not an order to swap movements or foods: deliberate
+benchmark, technique, rehab, taper, recovery, and preferred meal repeats can be
+right when the reason is current and explicit.
+Use a temporary, minimal comparison file with only the needed plan/log/copy
+fields. Do not persist sensitive health, nutrition, or body data for this check.
+
+## Safe novelty preflight
+
+Before writing a plan:
+
+- Compare it with recent logs, the accepted block, the prior next-day plan,
+  coaching notes, and recent chat. Do not rely on today's context alone.
+- Keep the block intent, primary anchors, progression, recovery, injury limits,
+  equipment, schedule, and athlete preferences.
+- On a normal training day, include one meaningful fresh element when safe: a
+  log-backed progression challenge; 1–2 compatible accessory variants; a
+  format/tempo/sequence/density change; or a small goal-relevant skill element.
+- Do not combine an unfamiliar element with a large jump in load, volume,
+  density, or impact. Do not rotate primary lifts just to look creative.
+- For a full block, define stable anchors plus a small planned accessory/format
+  rotation, and review the whole block for copy-pasted sessions.
+- In `rationale`, name the retained anchor, the fresh element, and why it fits.
+  If an exact repeat is deliberate, name the reason and metric being retested.
+- Do not reuse a recent title, motto, summary, or fuel sentence word for word.
+  New wording alone does not make a repeated session fresh. Exact safety/form
+  cues may repeat when consistency protects the athlete.
 
 ## Payload shapes
 

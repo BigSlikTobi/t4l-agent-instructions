@@ -69,7 +69,9 @@ skills cover the coaching phase that follows.
 cd skills/t4l-write-results
 python scripts/validate_payload.py training_block_plan path/to/block.json
 cat plan.json | python scripts/validate_payload.py next_day_plan
+python scripts/validate_payload.py next_day_plan plan.json \
+  --recent-context planning-context.json
 ```
 
 `ERROR:` = the app would discard it (exit 1). `WARN:` = contract field missing
-but not fatal (exit 0).
+or coaching-quality concern that needs review but is not fatal (exit 0).

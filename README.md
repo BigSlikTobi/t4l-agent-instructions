@@ -19,8 +19,8 @@ context, then begin the training workflow.
 
 - `docs/setup_instruction.md`: first-read sitemap for agents.
 - `docs/initial_setup.md`: server, app, and MCP initialization.
-- `docs/coaching_setup.md`: goal discovery, coaching rules, nutrition guidance,
-  and MCP result writes.
+- `docs/coaching_setup.md`: goal discovery, safe novelty and variety, coaching
+  rules, nutrition guidance, and MCP result writes.
 - `docs/exchange_contract.md`: REST and MCP exchange contract.
 - `docs/freshness_rules.md`: freshness and missing-data rules.
 

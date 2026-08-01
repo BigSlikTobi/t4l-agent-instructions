@@ -27,7 +27,8 @@ Ask for, or infer from current context and then confirm:
   whether the user wants food-based advice instead of fixed calorie or macro
   targets.
 - Preference context: coaching language, exercise preferences, and how much
-  explanation the user wants.
+  explanation the user wants. Include how much familiarity versus novelty keeps
+  training engaging and which session formats or skill elements they enjoy.
 
 Recommend a short-term goal if the user only gives a long-term goal. Keep the
 recommendation specific and time-boxed. For example, if the long-term goal is
@@ -42,6 +43,7 @@ Contract:
 - Block length and review date.
 - Success criteria.
 - Training constraints.
+- Variety preference and favorite or avoided session formats.
 - Nutrition guidance style.
 - Agent follow-up rule.
 
@@ -129,27 +131,105 @@ If either is missing or unclear, run First-Run Goal Discovery first.
      recent chat. Honor or explicitly address them; once a written plan reflects
      a request, mark it `addressed` in the notes (`write_coaching_notes`) so it
      stops resurfacing.
-5. Identify assumptions separately. Stale context, missing HealthKit
+5. Build a recent-comparison map **before** writing today's session. From recent
+   logs, the accepted block, the prior next-day plan, coaching notes, and recent
+   chat, note the last exposures to each exercise, exercise order, prescriptions,
+   session formats, titles, mottos, cues, summary language, and fuel advice.
+   Compare the candidate plan and copy with that map; do not merely read the
+   history and ignore it.
+6. Identify assumptions separately. Stale context, missing HealthKit
    permissions, missing logs, and absent nutrition entries are unknown.
-6. Decide today's training action:
+7. Decide today's training action:
    - `progress`: increase planned work because performance and recovery support
      it.
-   - `hold`: keep the plan because signals are neutral or uncertain.
+   - `hold`: keep the intended training stress and primary anchors because
+     signals are neutral or uncertain. This does not require copying the prior
+     session or its wording.
    - `substitute`: keep the intent but change movements for equipment,
      soreness, pain, or schedule.
    - `deload`: reduce load, volume, density, or intensity because fatigue or
      recovery is poor.
    - `rest`: skip planned training when recovery, pain, illness, or schedule
      makes training inappropriate.
-7. Give nutrition guidance from goal, body metrics, active block, recent
+8. Apply the Safe Novelty and Variety policy below. On a normal training day,
+   include at least one meaningful fresh element when the context allows it.
+9. Give nutrition guidance from goal, body metrics, active block, recent
    intake, training load, and recovery context. Prefer practical food-based
    advice over fixed targets unless the user explicitly asks for targets.
-8. Ask before changing goals, ignoring constraints, replacing the training
+10. Ask before changing goals, ignoring constraints, replacing the training
    direction, or writing app-consumed JSON.
+
+## Safe Novelty and Variety
+
+The goal is useful surprise inside a coherent program. Each app open should
+feel considered and current. It should not feel like the same card with a new
+date, and it should not feel like a random workout generator.
+
+### Keep the anchors
+
+Retain the session intent, current block target, primary movement patterns,
+benchmark lifts or skills, and any progression that the recent logs support.
+Always retain recovery limits, pain and injury constraints, available equipment,
+schedule, and athlete preferences. Novelty is subordinate to those facts.
+
+Primary work normally stays stable long enough to learn and progress. On a
+normal session, vary one or two accessories or one format lever instead of
+rewriting the whole workout. When introducing an unfamiliar movement or format,
+start with a simple version and conservative effort; do not also make a large
+jump in load, volume, density, or impact.
+
+### Require one meaningful fresh element when appropriate
+
+For a normal workout, the candidate should differ usefully from recent sessions
+with the same intent. At least one of these can satisfy the rule:
+
+- a clear progression challenge tied to the logs: load, reps, range, tempo,
+  density, duration, or quality target;
+- one or two safe accessory or movement variations that preserve the same
+  pattern and block purpose;
+- a different session structure, pairing, interval, sequence, or time cap that
+  changes the training experience without hiding extra workload;
+- a short skill, coordination, carry, mobility, or conditioning element that
+  fits the athlete's goal and stated preferences.
+
+New wording alone does **not** count as meaningful training novelty. If today's
+best prescription is a deliberate repeat — for example a benchmark, technique
+exposure, rehab sequence, taper, or recovery routine — keep it. State briefly
+why the repetition matters and what result or signal is being measured today.
+On a rest, deload, or recovery day, the fresh element can be a new observation,
+check-in, mobility option, route, or recovery focus. Do not add training stress
+just to make the screen look different.
+
+For a multi-week block, plan the variation instead of improvising it each day.
+Name the stable primary anchors, use a small compatible accessory/format pool,
+and rotate it at a clear cadence. Check the whole block for copy-pasted sessions.
+Do not replace every exercise every week; the athlete still needs repeat
+exposures that can be measured and progressed.
+
+### Reject stale repetition and fake variety
+
+- Do not send the same exercise order **and** prescription as a recent
+  same-purpose session unless the repeat is deliberate and explained.
+- Do not rotate primary lifts or familiar safe movements only to look creative.
+  A synonym, reordered bullet list, or renamed workout is not novelty.
+- Do not repeat a recent workout title, `dailyMotto`, opening line,
+  `yesterdaySummary`, or fuel-advice sentence word for word. Base each on a
+  current fact. Avoid stock lines such as "Consistency beats intensity" or
+  "Focus on carbs and protein" when they could apply to anyone.
+- Keep exact safety and form cues when consistent wording protects the athlete.
+  Otherwise, make cues specific to today's load, recent mistake, or target.
+
+### Make the choice visible
+
+Keep the workout `rationale` short, but make it say what remains anchored, what
+is fresh, and why that change fits today. For a deliberate repeat, name the
+reason and the metric being retested. This gives the next coaching run a useful
+trail instead of forcing it to guess why the session looked familiar.
 
 When writing a `next_day_plan`, include a `dailyMotto` — a short motivational
 phrase relevant to the athlete's current focus, training phase, or situation.
-Keep it concise and genuine, not generic.
+Keep it concise and genuine, not generic. Compare it with recent plans and do
+not reuse a recent motto word for word.
 
 When writing a `next_day_plan`, include `yesterdaySummary` with:
 - `headline`: a one-line performance summary of the previous day.
@@ -176,6 +256,12 @@ Daily nutrition advice should answer:
   meat, tofu, or legumes can add protein depending on preferences.
 - What should be adjusted from yesterday? Use yesterday's logged intake as a
   soft signal, not a strict rule.
+
+Compare the advice and meal ideas with recent fuel guidance. Do not keep sending
+the same carb/protein sentence or the same meal under a new date. Rotate foods,
+timing, and detail only within known preferences and digestion constraints. If
+the athlete likes a reliable routine meal, keep it; make today's portion,
+timing, or reason specific instead of forcing food novelty.
 
 Use nutrition to adapt training softly:
 
@@ -228,8 +314,8 @@ Whenever you run, drain the chat backlog:
    upper-body work") or a question you could not fully resolve — record it in the
    standing coaching notes: `get_coaching_notes`, merge the new item (keep the
    chat `seq` as `sourceSeq`), then `write_coaching_notes` with the merged set.
-   This is the bridge that carries chat intent into planning — the planner reads
-   these notes, never the raw chat scrollback. Do this **after** replying so it
+   This is the durable bridge that keeps chat intent in planning after the
+   bounded `recentChat` window rolls forward. Do this **after** replying so it
    never adds latency to the chat, and only when there is something durable to
    capture; skip routine chit-chat ("how was my run?", "thanks"). On a fast/heavy
    split, capture on whichever tier produced the real answer. See "Coaching notes

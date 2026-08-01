@@ -5,6 +5,34 @@ capabilities so you can use them immediately.
 
 ---
 
+## 2026-08-01 — Safe novelty: compare before prescribing
+
+Daily planning now treats recent context as a comparison window, not just a bag
+of facts. Before writing a plan, use `get_planning_context` to compare the
+candidate with recent logs, the accepted block, the prior next-day plan,
+coaching notes, and recent chat. Check exercises, order, prescription, format,
+titles, mottos, cues, summaries, and fuel wording.
+
+**The new default is stable anchors plus one useful fresh element.** Keep the
+block intent, primary lifts or skills, progression, recovery, injury limits,
+equipment, schedule, and athlete preferences. On a normal training day, add a
+log-backed progression challenge, one or two compatible accessory variants, a
+format/tempo/sequence change, or a small goal-relevant skill element. Do not
+turn the workout into a random rewrite, and do not pair an unfamiliar element
+with a large increase in another stress lever.
+
+Exact repeats remain valid for benchmarks, technique practice, rehab, taper,
+and recovery. Their workout `rationale` must say why the repeat matters and what
+is being measured. App-facing copy must also be current: do not reuse recent
+titles, mottos, summaries, or fuel sentences word for word. Exact safety and
+form cues can stay stable when consistency protects the athlete.
+
+The result validator accepts optional `--recent-context <file>` input and warns
+about identical workouts, repeated exercise order, reused app copy, and repeated
+meal suggestions. These are coaching-quality warnings, not app-import failures.
+
+---
+
 ## 2026-06-07 — Workout plan groups: supersets and circuits
 
 The app, watch, validator, and `t4l-server` now understand round-based workout

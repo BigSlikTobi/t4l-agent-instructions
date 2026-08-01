@@ -23,7 +23,8 @@ target.
 - **Nutrition context** — foods, timing, digestion, hydration, preferences, and
   whether the athlete wants food-based advice vs fixed calorie/macro targets.
 - **Preference context** — coaching language, exercise likes/dislikes, and how
-  much explanation they want.
+  much explanation they want. Ask how much familiarity versus novelty keeps
+  training engaging, and which session formats or skill elements they enjoy.
 
 If the athlete gives only a long-term goal, **recommend** a specific, time-boxed
 short-term block. Example: long-term "move better, less stiffness" → a 2-week
@@ -38,6 +39,7 @@ After the athlete confirms, summarize compactly:
 - Block length and review date
 - Success criteria
 - Training constraints
+- Variety preference and favorite/avoided session formats
 - Nutrition guidance style
 - Follow-up rule
 

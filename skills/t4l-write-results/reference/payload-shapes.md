@@ -39,6 +39,18 @@ Workout structure:
 Each **exercise** must include: `exerciseId`, `name`, `sets`, `reps`,
 `targetLoad`, `targetRpe`, `restSeconds`, `coachCue`.
 
+Before constructing the payload, compare it with the fresh planning context:
+recent logs, accepted block, prior next-day plan, coaching notes, and recent
+chat. Keep the block's primary anchors and safety constraints. On a normal day,
+include one meaningful fresh element when safe; normally vary 1–2 accessories
+or one format/progression lever instead of rewriting the session. A deliberate
+benchmark, technique, rehab, taper, or recovery repeat is valid when `rationale`
+states why it repeats and what is being measured.
+
+Do not reuse a recent title, motto, summary, or fuel sentence word for word.
+New wording alone does not make a repeated workout fresh. Exact safety and form
+cues may repeat when consistent wording protects the athlete.
+
 Optional per-exercise **mobile display** fields (add when useful — keep the
 Today screen compact, push long prose to `detailNote`/`media`):
 
@@ -140,7 +152,7 @@ omitted optional fields hide the matching UI element.
     "highlights": ["Squat 3×8 at 80 kg felt strong", "Conditioning well tolerated"],
     "tips": ["Shoulders may be fatigued — warm up extra", "Keep RPE under 8 on presses"]
   },
-  "dailyMotto": "Consistency beats intensity.",
+  "dailyMotto": "Smooth reps build the next five kilos.",
   "goals": {
     "longTerm": "Build strength while staying athletic",
     "shortTerm": "Increase bench press 1RM by 5 kg",
@@ -152,7 +164,8 @@ omitted optional fields hide the matching UI element.
 - `yesterdaySummary` — `headline` (string), `highlights` (2–4 strings), `tips`
   (1–3 strings). Base it on yesterday's workout log, nutrition, readiness, and
   HealthKit; skip if no prior-day data.
-- `dailyMotto` — short, genuine motivational phrase tied to the athlete's focus.
+- `dailyMotto` — short, genuine motivational phrase tied to the athlete's focus;
+  do not reuse a recent motto word for word.
 - `goals` — `longTerm`, `shortTerm`, `blockReviewDate` (ISO date).
 
 ## fuel_guidance
@@ -169,7 +182,7 @@ when responding to a `latestFuelCheckIn` / `fuelDiary` entry.
   "signal": "green",
   "signalLabel": "Gut versorgt",
   "signalSub": "Gute Basis für das heutige Training",
-  "todayAdvice": "Focus on carbs before and protein after your leg session today.",
+  "todayAdvice": "Your 18:00 leg session needs an earlier carb base: add rice or oats at lunch, then 25-35 g protein after.",
   "mealSuggestion": {
     "name": "Oatmeal with banana and whey",
     "rationale": "Quick carbs + protein 90 min before training",
