@@ -1,8 +1,13 @@
-# T4L Result Payload Shapes
+# T4L Legacy Result Payload Bodies
 
-Load this when constructing an app-consumed payload. Authoritative source is the
-repo's `docs/exchange_contract.md`; this is the working extract. Preserve the
-app's existing JSON shape from the matching request or context when one exists.
+This is the detailed source for the payload body expected by current legacy MCP
+writers. It does not define coaching state or prove phone application. The only
+normative coaching contract is
+`../../../contracts/coaching-contract.v1.schema.json`.
+
+Use a writer only when MCP `tools/list` advertises it. Follow the tool's declared
+arguments. Do not add a coaching-contract envelope to a legacy body unless the
+tool schema accepts it.
 
 ## training_block_plan
 
@@ -14,6 +19,11 @@ Each **block** must include: `id`, `style`, `title`, `durationWeeks`,
 `currentWeek`, `weeklyFocus`, `measurableTargets`, `workouts`, `createdBy`,
 `createdAt`.
 
+`durationWeeks` and `currentWeek` are positive integers. `weeklyFocus` and
+`measurableTargets` are non-empty arrays of strings, never plain text. A
+complete block contains at least one workout for every week from `1` through
+`durationWeeks`; the app does not generate the missing weeks.
+
 Valid `style`: `rugby`, `boxer`, `hybrid`, `strengthHypertrophy`,
 `conditioning`, `custom`.
 
@@ -23,6 +33,9 @@ or mixed plans) or non-empty `exercises` (simple flat plans only).
 
 Workout structure:
 
+- Choose the structure from intent. Flat work fits heavy, technical, rehab, or
+  full-rest exercises. Supersets fit compatible pairs. Circuits fit safe
+  three-or-more-exercise sequences. A workout may mix flat and grouped items.
 - Use `exercises` only for a simple flat list.
 - Use `items` for supersets/circuits. `items` may contain flat exercise items
   (`type: "exercise"`) and grouped items.
@@ -32,27 +45,19 @@ Workout structure:
   Use `circuit`, not `circle`; German UI may show `Zirkel`.
 - No nested groups in v1. Groups contain exercises only.
 - In groups, `rounds` is the repeated-execution source of truth; child `sets`
-  may be `1`.
+  is `1` or omitted. Do not use child `sets` to repeat grouped work.
 - `group.restSeconds` applies after the final child in each round. Child
-  `restSeconds` applies between child steps and can be `0`.
+  `restSeconds` applies after a non-final child before the next child step and
+  can be `0`. It is not rest between sets.
 
 Each **exercise** must include: `exerciseId`, `name`, `sets`, `reps`,
-`targetLoad`, `targetRpe`, `restSeconds`, `coachCue`.
+`targetLoad`, `targetRpe`, `restSeconds`, `coachCue`, and nested `media`.
 
-Before constructing the payload, compare it with the fresh planning context:
-recent logs, accepted block, prior next-day plan, coaching notes, and recent
-chat. Keep the block's primary anchors and safety constraints. On a normal day,
-include one meaningful fresh element when safe; normally vary 1–2 accessories
-or one format/progression lever instead of rewriting the session. A deliberate
-benchmark, technique, rehab, taper, or recovery repeat is valid when `rationale`
-states why it repeats and what is being measured.
+Before construction, run the state, freshness, progression, and review procedure
+in `../../../docs/coaching_setup.md`. A full block is always review-required.
 
-Do not reuse a recent title, motto, summary, or fuel sentence word for word.
-New wording alone does not make a repeated workout fresh. Exact safety and form
-cues may repeat when consistent wording protects the athlete.
-
-Optional per-exercise **mobile display** fields (add when useful — keep the
-Today screen compact, push long prose to `detailNote`/`media`):
+Per-exercise **mobile display** fields. Keep the Today screen compact and push
+long prose to `detailNote`/`media`:
 
 - `loadLabel` — compact chip text, e.g. `16-24 kg`
 - `primaryCue` — one short row cue, 3–8 words
@@ -63,8 +68,17 @@ Today screen compact, push long prose to `detailNote`/`media`):
   foam rolling, stretching, cardio)
 - `targetDurationSeconds` — prescribed duration for `timeOnly`; put a
   human-readable form in `reps` (e.g. `"20 min"`)
-- `media` — `explainerUrl` / `youtubeUrl` / `videoUrl` (preserve known YouTube /
-  Shorts links), `setup`, `cues`, `commonMistakes`
+- `media` — required. Generate `explainerUrl` in the exact canonical form
+  `https://www.youtube.com/shorts/<videoId>`. Normal YouTube `watch` links,
+  `youtu.be`, other hosts, web pages, and legacy `youtubeUrl`/`videoUrl` aliases
+  are invalid for generated plans. `setup`, `cues`, and `commonMistakes` must
+  be non-empty.
+
+Never invent a URL or video ID. Verify the Short for the exact variation during
+the current run or use a trusted, current catalog supplied in accepted context.
+A verified YouTube result may supply the ID, but store the canonical `/shorts/`
+form. If verification is impossible, stop before the writer and report the
+missing Shorts lookup capability.
 
 ```json
 {
@@ -81,6 +95,7 @@ Today screen compact, push long prose to `detailNote`/`media`):
   "detailNote": "Controlled eccentric. Stop adding load if depth changes.",
   "warningCue": "Stop if knee pain increases.",
   "media": {
+    "explainerUrl": "https://www.youtube.com/shorts/mF5tnEBrdkc",
     "setup": "Kettlebell tight to sternum, feet rooted.",
     "cues": ["Tripod foot", "Ribs down", "Drive evenly through both feet"],
     "commonMistakes": ["Losing heel pressure", "Knees collapsing inward"]
@@ -98,8 +113,39 @@ Today screen compact, push long prose to `detailNote`/`media`):
       "rounds": 3,
       "restSeconds": 90,
       "exercises": [
-        { "exerciseId": "push_up", "name": "Push-Up", "sets": 1, "reps": "10", "trackingMode": "repsOnly", "targetLoad": "bodyweight", "targetRpe": 7, "restSeconds": 0, "coachCue": "Brace and move as one line." },
-        { "exerciseId": "row", "name": "Row", "sets": 1, "reps": "12", "targetLoad": "moderate", "targetRpe": 7, "restSeconds": 0, "coachCue": "Pull elbows back without shrugging." }
+        {
+          "exerciseId": "hand_release_push_up",
+          "name": "Hand-Release Push-Up",
+          "sets": 1,
+          "reps": "10",
+          "trackingMode": "repsOnly",
+          "targetLoad": "bodyweight",
+          "targetRpe": 7,
+          "restSeconds": 0,
+          "coachCue": "Brace and move as one line.",
+          "media": {
+            "explainerUrl": "https://www.youtube.com/shorts/qFFtrj0mdBQ",
+            "setup": "Hands just outside shoulders, body in one line.",
+            "cues": ["Brace before lowering", "Press the floor away"],
+            "commonMistakes": ["Hips sagging", "Losing the hand release"]
+          }
+        },
+        {
+          "exerciseId": "double_dumbbell_row",
+          "name": "Double Dumbbell Row",
+          "sets": 1,
+          "reps": "12",
+          "targetLoad": "moderate",
+          "targetRpe": 7,
+          "restSeconds": 0,
+          "coachCue": "Pull elbows back without shrugging.",
+          "media": {
+            "explainerUrl": "https://www.youtube.com/shorts/t7VDDNKBNx8",
+            "setup": "Hinge with both dumbbells below the shoulders.",
+            "cues": ["Keep the torso still", "Pull elbows toward the hips"],
+            "commonMistakes": ["Shrugging", "Standing up during the row"]
+          }
+        }
       ]
     }
   ]
@@ -108,33 +154,40 @@ Today screen compact, push long prose to `detailNote`/`media`):
 
 ```json
 {
-  "exerciseId": "easy_walk",
-  "name": "Easy Walk",
-  "sets": 1,
-  "reps": "20 min",
-  "trackingMode": "timeOnly",
-  "targetDurationSeconds": 1200,
-  "targetLoad": "Comfortable pace, nose breathing.",
-  "targetRpe": 3,
-  "restSeconds": 0,
-  "coachCue": "Stay relaxed, use this as active recovery.",
-  "primaryCue": "Nose breathing, easy pace"
-}
-```
-
-```json
-{
-  "exerciseId": "push_up",
-  "name": "Push-Up",
+  "exerciseId": "air_squat",
+  "name": "Air Squat",
   "sets": 3,
   "reps": "12-15",
   "trackingMode": "repsOnly",
-  "targetLoad": "Full range of motion, chest to floor.",
+  "targetLoad": "Bodyweight with repeatable depth.",
   "targetRpe": 7,
   "restSeconds": 60,
-  "coachCue": "Keep core tight, elbows at 45 degrees.",
-  "primaryCue": "Core tight, elbows 45°",
-  "warningCue": "Stop if wrist pain increases."
+  "coachCue": "Keep the whole foot rooted and drive the knees out.",
+  "primaryCue": "Whole foot rooted",
+  "warningCue": "Stop if knee pain increases.",
+  "media": {
+    "explainerUrl": "https://www.youtube.com/shorts/C_VtOYc6j5c",
+    "setup": "Feet around shoulder width with toes slightly out.",
+    "cues": ["Brace", "Knees track over toes", "Stand tall"],
+    "commonMistakes": ["Heels lifting", "Knees collapsing inward"]
+  }
+}
+```
+
+For a circuit, use the same child exercise shape with three or more children:
+
+```json
+{
+  "type": "circuit",
+  "groupId": "circuit_1",
+  "title": "Conditioning Circuit",
+  "rounds": 3,
+  "restSeconds": 90,
+  "exercises": [
+    { "...": "full exercise with required media" },
+    { "...": "full exercise with required media" },
+    { "...": "full exercise with required media" }
+  ]
 }
 ```
 
@@ -162,77 +215,12 @@ omitted optional fields hide the matching UI element.
 ```
 
 - `yesterdaySummary` — `headline` (string), `highlights` (2–4 strings), `tips`
-  (1–3 strings). Base it on yesterday's workout log, nutrition, readiness, and
-  HealthKit; skip if no prior-day data.
+  (1–3 strings). Base it only on fresh phone-accepted context; skip it when the
+  prior-day data or provenance is missing.
 - `dailyMotto` — short, genuine motivational phrase tied to the athlete's focus;
   do not reuse a recent motto word for word.
 - `goals` — `longTerm`, `shortTerm`, `blockReviewDate` (ISO date).
 
-## fuel_guidance
-
-Use `write_fuel_guidance` for day-level nutrition recommendations. Always
-accepted by the app, but always send a complete, useful payload — especially
-when responding to a `latestFuelCheckIn` / `fuelDiary` entry.
-
-```json
-{
-  "schema": "fuel_guidance.v1",
-  "issuedAt": "2026-05-27T08:00:00Z",
-  "validFor": "2026-05-27",
-  "signal": "green",
-  "signalLabel": "Gut versorgt",
-  "signalSub": "Gute Basis für das heutige Training",
-  "todayAdvice": "Your 18:00 leg session needs an earlier carb base: add rice or oats at lunch, then 25-35 g protein after.",
-  "mealSuggestion": {
-    "name": "Oatmeal with banana and whey",
-    "rationale": "Quick carbs + protein 90 min before training",
-    "timing": "Pre-workout"
-  },
-  "yesterdayRead": "Yesterday's intake was solid — 2650 kcal, 175g protein.",
-  "mealIdeas": [
-    { "tag": "pre-workout", "name": "Rice with chicken", "why": "Easy carbs + lean protein" },
-    { "tag": "post-workout", "name": "Greek yogurt with berries", "why": "Fast protein + antioxidants" }
-  ]
-}
-```
-
-Valid `signal`: `green` (nutrition supporting training), `hold` (neutral,
-maintain), `fuel` (eat more / focus macros), `deload` (reduce intensity due to
-nutrition or recovery deficit).
-
-## nutrition_analysis_result
-
-Use `write_nutrition_analysis_result` only when responding to a pending
-nutrition-analysis request. Read it with `get_nutrition_analysis_request` (and
-the meal photo via `get_blob_base64`), then echo the request's `requestId`.
-
-```json
-{
-  "schema": "nutrition_analysis_result.v1",
-  "requestId": "<id from the request>",
-  "mealDescription": "Chicken, rice, and vegetables",
-  "calories": 780,
-  "protein": 48,
-  "carbs": 82,
-  "fat": 28,
-  "bodyWeightKg": 82.0,
-  "confidence": 0.7,
-  "assumptions": ["Estimated ~150 g cooked rice"],
-  "rationale": "Why these estimates and the target fit the context.",
-  "correctionNotes": "What the user should correct if the estimate is off.",
-  "target": {
-    "dailyCalories": 2750,
-    "protein": 175,
-    "carbs": 320,
-    "fat": 80,
-    "goalMode": "recomposition",
-    "rationale": "Training load supports maintenance."
-  }
-}
-```
-
-- `calories` must be > 0 and macros non-negative, or the app discards the result.
-- `confidence` is in `0..1`; estimates are approximate, so always include
-  `assumptions`.
-- `target` is optional and, when present, updates the athlete's daily nutrition
-  target — include it only intentionally.
+Nutrition and fuel payloads are intentionally absent. The coach is
+training-and-recovery only. It must not analyze meals or generate calorie,
+macro, fluid, electrolyte, supplement, weight, or body-composition guidance.

@@ -1,542 +1,215 @@
-# Exchange Contract
+# Exchange Adapter
 
-The app and agent communicate through the self-hosted T4L server. The app uses
-semantic REST endpoints. Agents use MCP tools. The server stores JSON payloads
-in SQLite and does not own accepted training state.
+This file explains how current MCP transport maps to the T4L coaching contract.
+It is not a second contract.
 
-## App uploads through REST
+The only normative source is:
 
-- `PUT /v1/app/snapshot`
-- `PUT /v1/context/day`
-- `PUT /v1/context/daily-snapshot`
-- `PUT /v1/profile`
-- `PUT /v1/requests/training-block`, `PUT /v1/requests/nutrition-analysis`
-- `POST /v1/blobs/meal-images/{name}` for meal photos
+`contracts/coaching-contract.v1.schema.json`
 
-There is no folder-based or `/files/{name}` exchange. The server rejects those
-paths.
+Legacy result body shapes live in:
 
-## Agent reads through MCP
+`skills/t4l-write-results/reference/payload-shapes.md`
 
-- `get_day_context`: primary current-day context.
-- `get_app_snapshot`: full phone sync payload when present.
-- `get_profile`: athlete profile.
-- `get_pending_requests`: pending app requests.
-- `get_training_block_request`: latest pending training-block request.
-- `get_nutrition_analysis_request`: latest pending meal-analysis request.
-- `get_blob_base64`: read an uploaded meal image. Pass the name from the
-  request, e.g. `{ "name": "meal_images/<file>.jpg" }`.
-- `get_recent_chat_messages`: recent chat turns (answered and pending), oldest
-  first, so the planner can see what the athlete actually said in chat. Optional
-  `limit` (default 20, max 200). Distinct from `get_pending_chat_messages`, which
-  returns only unanswered work.
-- `get_coaching_notes`: the standing coaching notes you authored — explicit
-  athlete requests and open questions extracted from chat that should shape
-  planning. Returns the latest notes payload, or `null`.
-- `get_planning_context`: the full planning working set in one call — day
-  context, recent logs, profile, active block, next-day plan, fuel/nutrition,
-  pending requests, coaching notes, and recent chat. Optional `recentChatLimit`
-  (default 20, max 200). Prefer this for daily planning instead of stitching the
-  reads above by hand.
+## Capability discovery
 
-## Agent results through MCP
+Read MCP `tools/list` at runtime. Do not infer tools from the server executable,
+a journal entry, or this list.
 
+Personalized coaching requires a provenance-rich `get_planning_context`. The
+instruction layer does not allow direct snapshot, daily-snapshot, profile,
+memory, HealthKit, or live-set fallbacks.
+
+When advertised, legacy proposal writers are:
+
+- `write_athlete_setup_draft`
 - `write_training_block_plan`
 - `write_next_day_plan`
-- `write_fuel_guidance`
-- `write_nutrition_analysis_result`
-
-The app imports pending results only after user confirmation where needed;
-training blocks always require explicit user import.
-
-## Agent planning notes through MCP
-
-- `write_coaching_notes`: persist the standing coaching notes (explicit athlete
-  requests, open questions) so important chat intent survives after the bounded
-  `recentChat` window rolls forward. Argument: `payload` (object). It
-  **replaces** the latest notes, so read the current notes first with
-  `get_coaching_notes`, merge, then write the whole set back. Unlike the result
-  tools, these notes are not consumed by the app — they are context you write
-  for your own future planning runs. See "Coaching notes shape" below.
-
-## Live chat through MCP
-
-The athlete chats with you directly inside the app — this replaces any
-third-party chat app. The server relays the conversation; you read pending
-messages and post replies through MCP.
-
-- `get_pending_chat_messages`: list unanswered athlete messages. Returns
-  `{ "messages": [ ... ] }`, oldest first.
-- `write_chat_reply`: post a reply. Arguments: `content` (required, non-empty
-  string) and `inReplyToSeq` (optional integer — the `seq` of the message you
-  are answering). Returns `{ "posted": { ...the stored reply... } }`.
-
-See "Live chat channel shape" below for message fields and the turn lifecycle.
-
-## Delivery and validation
-
-The server validates every write: a `schema` field, when present, must be a
-non-empty string. Set the correct `schema` for each result, or omit it to accept
-the default `<kind>.v1`. A non-string schema is rejected.
-
-The app validates each result when it imports it. A result the app cannot read
-is **discarded once** — it is not retried — and the user is told to ask you to
-resend. There is no silent retry, so always send complete, valid payloads. The
-app rejects:
-
-- `training_block_plan`: empty `workouts`, or `durationWeeks` below 1.
-- `next_day_plan`: a workout with neither non-empty `items` nor non-empty
-  `exercises`.
-- `nutrition_analysis_result`: `calories` not greater than 0, or a negative
-  macro.
-
-`fuel_guidance` is always accepted. If a result is rejected, fix the payload and
-write it again.
-
-## Coaching-quality preflight
-
-Schema-valid is not the same as good coaching. Before writing a
-`training_block_plan` or `next_day_plan`, compare the candidate with the fresh
-`get_planning_context` bundle:
-
-- `recentLogs`: recent exercise exposure, prescriptions, order, and completed
-  training;
-- `activeBlock`: the intent, anchors, and planned progression to retain;
-- `nextDayPlan`: the prior generated session and recent app-facing copy;
-- `coachingNotes` and `recentChat`: explicit constraints, requests, and variety
-  preferences.
-
-Keep block intent, primary anchors, progression, recovery, injury constraints,
-equipment, schedule, and athlete preferences. On a normal training day, add at
-least one meaningful fresh element when safe: a log-backed progression
-challenge; one or two pattern-matched accessories; a format, sequence, tempo,
-or density change; or a small goal-relevant skill/conditioning element. Do not
-pair an unfamiliar element with a large increase in another stress lever.
-
-Do not repeat the same exercise order and prescription from a recent
-same-purpose session unless it is a deliberate benchmark, technique, rehab,
-taper, or recovery repeat. Put a short explanation in the workout `rationale`:
-what remains anchored, what is fresh, and why it fits today. If repetition is
-deliberate, name the reason and metric being retested.
-
-Compare app-facing wording too. Do not reuse a recent workout title,
-`dailyMotto`, opening, summary, or fuel-advice sentence word for word. New words
-alone do not make a stale session novel, and exact safety/form cues may repeat
-when consistent wording protects the athlete. Rotate meal ideas only within
-known food and digestion preferences; a preferred routine meal may stay when
-its timing, portion, or reason is current. These are coaching-quality rules;
-they do not add new required JSON fields.
-
-## Training block plan shape
-
-Use `write_training_block_plan` only for a complete block. Preserve the app's
-existing JSON shape: a raw block object or `{ "block": { ... } }`.
-
-Each block must include:
-
-- `id`
-- `style`
-- `title`
-- `durationWeeks`
-- `currentWeek`
-- `weeklyFocus`
-- `measurableTargets`
-- `workouts`
-- `createdBy`
-- `createdAt`
-
-Valid `style` values are `rugby`, `boxer`, `hybrid`,
-`strengthHypertrophy`, `conditioning`, and `custom`.
-
-Each workout must include:
-
-- `id`
-- `week`
-- `day`
-- `title`
-- `focus`
-- `rationale`
-- `conditioning`
-- non-empty `items` for grouped/new plans, or non-empty `exercises` for simple
-  flat plans
-
-For workout structure:
-
-- Use `exercises` only when the workout is a simple flat list.
-- Use `items` when the workout contains supersets or circuits. `items` may
-  contain flat exercise items and grouped items.
-- A flat item has `type: "exercise"` plus the normal exercise prescription
-  fields.
-- A superset has `type: "superset"`, exactly 2 child exercises, and `rounds`.
-  It executes A1, B1, A2, B2, etc. Do not write all sets of A before B.
-- A circuit has `type: "circuit"`, 3 or more child exercises, and `rounds`.
-  Use the JSON term `circuit`, never `circle`; German UI may display `Zirkel`.
-- Do not nest groups inside groups in v1.
-- In grouped items, `rounds` is the source of truth for repeated execution.
-  Child `sets` may be `1`; the app displays/logs the child exercises against the
-  group round count.
-- `group.restSeconds` applies after the last child of each round. Child
-  `restSeconds` applies between child steps and can be `0`.
-
-Each exercise must include:
-
-- `exerciseId`
-- `name`
-- `sets`
-- `reps`
-- `targetLoad`
-- `targetRpe`
-- `restSeconds`
-- `coachCue`
-
-For mobile execution, each exercise should also include these optional display
-fields whenever useful:
-
-- `loadLabel`: compact chip text for Today, for example `12-24 kg`
-- `primaryCue`: one short row cue, ideally 3-8 words
-- `detailNote`: longer coaching explanation for the detail sheet
-- `warningCue`: short pain, range-of-motion, or safety cue
-- `trackingMode` (optional, string): how the app should track this exercise.
-  `"weightAndReps"` (default) tracks weight and reps per set.
-  `"repsOnly"` tracks reps only — use for bodyweight exercises like push-ups,
-  pull-ups, dips, and planks. `"timeOnly"` tracks duration only — use for easy
-  walks, foam rolling, stretching, and cardio. If omitted, the app defaults to
-  `"weightAndReps"`.
-- `targetDurationSeconds` (optional, integer): prescribed duration for
-  `"timeOnly"` exercises. The `reps` field should describe the activity in
-  human-readable form (e.g. `"20 min"`).
-
-Keep `targetLoad` and `coachCue` complete enough for logs, review, and future
-agents. Use `loadLabel` and `primaryCue` to keep the phone workout screen
-compact. If display fields are omitted, the app falls back to `targetLoad` and
-`coachCue`, so long prose there will make the Today screen harder to scan.
-
-Exercises should include `media` when setup, cue, mistake, or video context is
-known. Preserve known YouTube or Shorts links; the phone uses them for the
-Today exercise video button. `media` supports:
-
-- `explainerUrl`, `youtubeUrl`, or `videoUrl`
-- `setup`
-- `cues`
-- `commonMistakes`
-
-Example exercise:
-
-```json
-{
-  "exerciseId": "goblet_squat",
-  "name": "Goblet Squat",
-  "sets": 3,
-  "reps": "8-10",
-  "targetLoad": "Use the heaviest kettlebell that keeps tempo and depth clean.",
-  "loadLabel": "16-24 kg",
-  "targetRpe": 7.5,
-  "restSeconds": 90,
-  "coachCue": "Brace before every rep and keep pressure through the whole foot.",
-  "primaryCue": "Brace before every rep",
-  "detailNote": "Use a controlled eccentric. Stop adding load if depth changes.",
-  "warningCue": "Stop if knee pain increases.",
-  "media": {
-    "setup": "Kettlebell tight to sternum, feet rooted.",
-    "cues": ["Tripod foot", "Ribs down", "Drive evenly through both feet"],
-    "commonMistakes": ["Losing heel pressure", "Knees collapsing inward"]
-  }
-}
-```
-
-Example grouped workout structure:
-
-```json
-{
-  "id": "w1d2_density",
-  "week": 1,
-  "day": 2,
-  "title": "Upper Density",
-  "focus": "Superset push and pull patterns.",
-  "rationale": "Alternating patterns keeps the session dense without rushing form.",
-  "conditioning": "",
-  "items": [
-    {
-      "type": "superset",
-      "groupId": "ss_1",
-      "title": "Superset 1",
-      "rounds": 3,
-      "restSeconds": 90,
-      "exercises": [
-        { "exerciseId": "push_up", "name": "Push-Up", "sets": 1, "reps": "10", "trackingMode": "repsOnly", "targetLoad": "bodyweight", "targetRpe": 7, "restSeconds": 0, "coachCue": "Brace and move as one line." },
-        { "exerciseId": "row", "name": "Row", "sets": 1, "reps": "12", "targetLoad": "moderate", "targetRpe": 7, "restSeconds": 0, "coachCue": "Pull elbows back without shrugging." }
-      ]
-    }
-  ]
-}
-```
-
-```json
-{
-  "exerciseId": "easy_walk",
-  "name": "Easy Walk",
-  "sets": 1,
-  "reps": "20 min",
-  "trackingMode": "timeOnly",
-  "targetDurationSeconds": 1200,
-  "targetLoad": "Comfortable pace, nose breathing.",
-  "targetRpe": 3,
-  "restSeconds": 0,
-  "coachCue": "Stay relaxed, use this as active recovery.",
-  "primaryCue": "Nose breathing, easy pace"
-}
-```
-
-```json
-{
-  "exerciseId": "push_up",
-  "name": "Push-Up",
-  "sets": 3,
-  "reps": "12-15",
-  "trackingMode": "repsOnly",
-  "targetLoad": "Full range of motion, chest to floor.",
-  "targetRpe": 7,
-  "restSeconds": 60,
-  "coachCue": "Keep core tight, elbows at 45 degrees.",
-  "primaryCue": "Core tight, elbows 45°",
-  "warningCue": "Stop if wrist pain increases."
-}
-```
-
-## Next-day plan shape
-
-Use `write_next_day_plan` for a single day's workout. The payload wraps a
-workout object and optional coaching context.
-
-```json
-{
-  "workout": { "...same shape as a block workout..." },
-  "yesterdaySummary": {
-    "headline": "Solid leg day — all sets hit at RPE 7-8",
-    "highlights": [
-      "Squat 3×8 at 80 kg felt strong",
-      "Conditioning well tolerated"
-    ],
-    "tips": [
-      "Shoulders may be fatigued — warm up extra today",
-      "Keep RPE under 8 on pressing movements"
-    ]
-  },
-  "dailyMotto": "Smooth reps build the next five kilos.",
-  "goals": {
-    "longTerm": "Build strength while staying athletic",
-    "shortTerm": "Increase bench press 1RM by 5 kg",
-    "blockReviewDate": "2026-06-15"
-  }
-}
-```
-
-All fields except `workout` are optional. If omitted, the app hides the
-corresponding UI element.
-
-- `workout` (required): the workout object (same shape as a block workout).
-- `yesterdaySummary` (optional, object): previous-day performance summary.
-  - `headline` (string): one-line performance summary.
-  - `highlights` (array of strings): 2-4 notable observations.
-  - `tips` (array of strings): 1-3 things to watch out for today.
-- `dailyMotto` (optional, string): short motivational phrase for the day. Tie it
-  to current context and do not reuse a recent motto word for word.
-- `goals` (optional, object): current goal context.
-  - `longTerm` (string): the athlete's long-term goal.
-  - `shortTerm` (string): the current block's short-term target.
-  - `blockReviewDate` (string, ISO date): when the current block ends.
-
-`goals` can also be included in `write_training_block_plan` payloads at the
-top level alongside the block object.
-
-## Fuel guidance shape
-
-Use `write_fuel_guidance` to send daily nutrition recommendations to the app.
-Write fuel guidance after inspecting the day context's `latestFuelCheckIn` and
-`fuelDiary` entries, as part of the morning coaching loop, or when the user
-asks for nutrition recommendations.
-
-```json
-{
-  "schema": "fuel_guidance.v1",
-  "issuedAt": "2026-05-27T08:00:00Z",
-  "validFor": "2026-05-27",
-  "signal": "green",
-  "signalLabel": "Gut versorgt",
-  "signalSub": "Gute Basis für das heutige Training",
-  "todayAdvice": "Your 18:00 leg session needs an earlier carb base: add rice or oats at lunch, then 25-35 g protein after.",
-  "mealSuggestion": {
-    "name": "Oatmeal with banana and whey",
-    "rationale": "Quick carbs + protein 90 min before training",
-    "timing": "Pre-workout"
-  },
-  "yesterdayRead": "Yesterday's intake was solid — 2650 kcal, 175g protein.",
-  "mealIdeas": [
-    { "tag": "pre-workout", "name": "Rice with chicken", "why": "Easy carbs + lean protein" },
-    { "tag": "post-workout", "name": "Greek yogurt with berries", "why": "Fast protein + antioxidants" }
-  ]
-}
-```
-
-Valid `signal` values: `green`, `hold`, `fuel`, `deload`.
-
-- `green`: nutrition is supporting training well.
-- `hold`: nutrition is neutral, maintain current approach.
-- `fuel`: the athlete should eat more or focus on specific macros.
-- `deload`: reduce training intensity due to nutrition or recovery deficit.
-
-## Nutrition analysis result shape
-
-Use `write_nutrition_analysis_result` only when responding to a pending
-nutrition-analysis request. Read the request with `get_nutrition_analysis_request`
-and the meal photo, if any, with `get_blob_base64`, then echo the request's
-`requestId` in the result.
-
-```json
-{
-  "schema": "nutrition_analysis_result.v1",
-  "requestId": "<id from the request>",
-  "mealDescription": "Chicken, rice, and vegetables",
-  "calories": 780,
-  "protein": 48,
-  "carbs": 82,
-  "fat": 28,
-  "bodyWeightKg": 82.0,
-  "confidence": 0.7,
-  "assumptions": ["Estimated ~150 g cooked rice"],
-  "rationale": "Why these estimates and the target fit the context.",
-  "correctionNotes": "What the user should correct if the estimate is off.",
-  "target": {
-    "dailyCalories": 2750,
-    "protein": 175,
-    "carbs": 320,
-    "fat": 80,
-    "goalMode": "recomposition",
-    "rationale": "Training load supports maintenance."
-  }
-}
-```
-
-- `calories` must be greater than 0 and macros must be non-negative, or the app
-  discards the result.
-- `confidence` is in `0..1`. Image and text estimates are approximate, so always
-  include `assumptions`.
-- `target` is optional. When present, it updates the athlete's daily nutrition
-  target, so only include it intentionally.
-
-## Live chat channel shape
-
-The chat is an append-only conversation. Each message is an object:
-
-```json
-{
-  "seq": 1,
-  "conversationId": "default",
-  "role": "user",
-  "content": "How was my long run?",
-  "status": "pending",
-  "createdAt": "2026-05-29T14:21:55+00:00",
-  "updatedAt": "2026-05-29T14:21:55+00:00"
-}
-```
-
-- `seq` (integer): monotonic id and ordering cursor. Strictly increasing.
-- `role`: `"user"` (the athlete) or `"assistant"` (you).
-- `content`: the message text (max 8000 characters per message).
-- `status`: for a user turn, `"pending"` (not yet answered) → `"answered"`.
-  For your reply, `"complete"`.
-
-Turn lifecycle:
-
-1. The athlete posts a message — it is `pending`.
-2. `get_pending_chat_messages` returns every `pending` user turn, oldest first.
-3. You answer with `write_chat_reply`, passing the user turn's `seq` as
-   `inReplyToSeq`. This atomically stores your reply (`complete`) and marks the
-   answered user turn(s) `answered`, so the next `get_pending_chat_messages`
-   will not return them again. Without `inReplyToSeq`, all currently pending
-   user turns are marked answered.
-
-Delivery is message-level: post one complete reply per turn (there is no
-token-by-token streaming yet). The app polls and renders new messages by `seq`.
-Keep replies conversational and concise — this is live chat, not a coaching
-document. Only call the `write_*` result tools (plans, fuel guidance) when the
-athlete actually asks for app-importable output; a normal chat answer is just
-`write_chat_reply`.
-
-## Coaching notes shape
-
-Coaching notes are your standing, self-authored planning memory: durable intent
-extracted from free-text chat that should influence future plans even after the
-bounded recent-chat window rolls forward. The server stores them verbatim
-(validation checks only an optional string `schema`), so you own the shape. A
-workable shape:
-
-```json
-{
-  "schema": "coaching_notes.v1",
-  "updatedAt": "2026-05-31T08:00:00Z",
-  "athleteRequests": [
-    {
-      "text": "Move the long run to Saturday going forward.",
-      "sourceSeq": 42,
-      "status": "open",
-      "createdAt": "2026-05-31T07:55:00Z"
-    }
-  ],
-  "openQuestions": [
-    {
-      "text": "Is the left knee still sore after Tuesday's session?",
-      "sourceSeq": 39,
-      "createdAt": "2026-05-30T18:10:00Z"
-    }
-  ],
-  "summary": "Wants weekend long runs and more upper-body volume; watching left knee."
-}
-```
-
-- `athleteRequests`: explicit, plan-relevant asks from chat. Keep `sourceSeq`
-  (the chat `seq` it came from) for traceability. Mark `status` `"addressed"`
-  (or drop the entry) once a written plan reflects it, so it stops nagging.
-- `openQuestions`: things you asked or could not resolve and should follow up on.
-- `summary`: optional rolling one-paragraph digest for fast planner intake.
-
-`write_coaching_notes` replaces the whole object — read with `get_coaching_notes`,
-merge, write back. Record only durable, plan-relevant intent; skip routine
-chit-chat.
-
-## Planning context shape
-
-`get_planning_context` returns one `planning_context.v1` object so daily
-planning is a single read instead of eight. Each artifact slot is the latest
-payload or `null`:
-
-```json
-{
-  "schema": "planning_context.v1",
-  "generatedAt": "2026-05-31T08:00:00+00:00",
-  "dayContext": { },
-  "recentLogs": [ ],
-  "profile": { },
-  "activeBlock": { },
-  "nextDayPlan": { },
-  "fuelGuidance": { },
-  "nutritionAnalysis": { },
-  "pendingRequests": [ ],
-  "coachingNotes": { },
-  "recentChat": [ ]
-}
-```
-
-- `recentLogs` is lifted from `daily_snapshot.recentLogs` (the recent
-  training-log digest source); `coachingNotes` is the standing notes above;
-  `recentChat` is the most recent chat turns (bounded by `recentChatLimit`).
-- For plan generation, treat `recentLogs`, `activeBlock`, `nextDayPlan`,
-  `coachingNotes`, and `recentChat` as the recent-comparison window. Read the
-  bundle immediately before planning; do not cache a variety decision across
-  days. If that window is missing, novelty is unknown rather than proven.
-- The bundle relays artifacts verbatim and performs no interpretation. Durable,
-  interpreted requests and open questions come from `coachingNotes`, which you
-  author; `recentChat` remains a bounded raw context window.
-- The fuller artifacts behind some slots (full app snapshot, individual pending
-  requests) remain available through their dedicated read tools when you need
-  more than the latest payload.
+
+Nutrition and fuel readers and writers are intentionally outside the coaching
+surface, including when an old server still stores those legacy artifact kinds.
+
+`write_athlete_setup_draft` transports a strict confirmed onboarding draft. It
+writes pending result kind `athlete_setup_draft` with payload schema
+`athlete_setup_draft.v1`. It is not accepted state. The phone alone can
+accept it and expose that decision through a fresh `contextRevision`.
+
+When advertised, legacy chat tools are:
+
+- `get_pending_chat_messages`
+- `write_chat_reply`
+
+An auxiliary read may be used only when it is present in `tools/list`, the
+planning context references the exact object, and its response carries usable
+provenance. Do not turn an optional auxiliary tool into a required fictional
+workflow.
+
+## Planning-context mapping
+
+The planning tool must expose the `planning_context` branch of coaching
+contract v1. Its `acceptedState` must satisfy the phone-owned `accepted_state`
+branch.
+
+Standard JSON Schema validators ignore the contract's `x-t4l-invariants`
+annotations. A compatible app, server, or runtime must enforce those semantic
+rules too. The golden corpus under `tests/fixtures/coaching_contract/` exercises
+them but does not replace the normative schema.
+
+At minimum it must keep these apart:
+
+- phone-owned accepted state;
+- current/open agent proposals;
+- applied receipts with their embedded proposal history;
+- open requests in `currentRequests`;
+- consumed, rejected, and expired records in `requestHistory`.
+
+Each accepted source needs its own source time, freshness, and revision. A
+bundle `generatedAt` only tells when the server assembled the response.
+
+Old `planning_context.v1` responses can place the latest agent result in fields
+named `activeBlock` or `nextDayPlan`. Those fields are proposal history unless
+phone provenance and an accepted revision prove otherwise. Legacy fuel and
+nutrition fields must be removed before the context reaches the model.
+
+If the mapping is absent, stop personalized/state-changing coaching and report
+the compatibility gap.
+
+## Proposal writes
+
+The agent creates proposals only. Contract-v1 delivery requires a writer whose
+declared arguments accept the full `proposal` envelope and whose response keeps
+its request ID, result ID, digest, base revision, target, change class, review,
+and expiry.
+
+Do not add envelope fields to a writer that does not accept them. A legacy raw
+body write is non-contract storage. It cannot support correlation, safe retry,
+automatic apply, or a matching applied receipt. Treat it as manual-only and
+application-unconfirmable.
+
+Every contract-v1 proposal answers one phone-authored `currentRequest` and must
+echo its `requestId`. Never invent that ID. Without a matching current request,
+the agent may discuss a draft but cannot emit a contract-v1 proposal.
+
+A legacy write response proves broker storage at most. It does not prove:
+
+- phone import;
+- athlete review;
+- application;
+- a new accepted revision.
+
+Do not invent a request status. Keep the coaching intent unfulfilled after the
+write. Fulfil it only when the phone returns a matching applied receipt. A later
+revision or similar-looking state is not proposal-correlated proof.
+
+### Retry identity
+
+Retry the same logical proposal only with the same `requestId`, `resultId`,
+payload digest, and byte-for-byte same canonical full proposal envelope. Any
+changed field — including target, base revision, source dependency, expiry,
+review, or payload — needs a new `resultId`. Reusing a `resultId` with a changed
+envelope is a conflict.
+
+Legacy writers do not expose this idempotency contract. After an ambiguous
+timeout, do not blindly send the proposal again. Re-read current proposal and
+accepted-state evidence. If the outcome is still unclear, tell the athlete or
+operator that delivery is unknown.
+
+## Review and apply
+
+The schema has the exact review and consent conditionals.
+
+- Full blocks and material daily changes stay review-required.
+- Every apply mode rejects a proposal at or after its `expiresAt`.
+- Standing consent is valid only when it comes from accepted phone state, is
+  unexpired, and covers the exact proposal scope.
+- Automatic apply also needs the same target date/timezone, matching base
+  revision and no active-session conflict.
+- A broker write response is never an applied receipt.
+
+Current legacy tools do not prove review or automatic apply. Their raw stored
+bodies are non-contract and manual-only.
+
+## Chat sequencing
+
+Pending queue order is not ownership. A worker may reply only to a turn it owns.
+
+### With claim support
+
+Use concurrent workers only when `tools/list` exposes an atomic claim/lease and
+idempotent reply contract. Keep the claimed message text, conversation ID,
+message sequence/ID, claim ID, and claim expiry together for the whole job.
+
+Before a write, verify the claim is still valid. Bind the write to that exact
+message and its idempotency key. Never move to a newer athlete message because
+it arrived while work was running.
+
+### Legacy single-worker mode
+
+If the runtime only exposes `get_pending_chat_messages` and `write_chat_reply`:
+
+1. Prove one exclusive consumer for the conversation through a single
+   deployment or external lock. If that cannot be proved, do not write chat.
+2. Select the oldest pending athlete message.
+3. Copy its content, conversation ID, and `seq` into the job.
+4. Read a fresh `get_planning_context` for answer context.
+5. Call `write_chat_reply` with the original `seq` as `inReplyToSeq`.
+6. Repeat for the next pending message.
+
+Never omit `inReplyToSeq`. An unscoped legacy reply can acknowledge unrelated
+newer messages. Polling is not idempotent, so overlapping processes or workers
+can duplicate replies. A written instruction saying “one worker” is not a lock.
+
+### Escalation
+
+An escalation acknowledgement and its final answer belong to the same claimed
+athlete message. Pass the captured message and all IDs directly to the heavy
+worker. Do not re-poll to rediscover the question. Bind both writes to the same
+original sequence/claim.
+
+An acknowledgement is not completion. If durable claim/processing state is not
+available, a crash can strand the turn. Say this honestly. On an ambiguous
+write, inspect current chat evidence before retrying. Without an idempotency
+key, do not blindly post again.
+
+Never acknowledge, close, or answer a newer unrelated message as part of the
+older job.
+
+## Compatibility policy
+
+| Layer | Contract v1 responsibility |
+|---|---|
+| Phone app | Own accepted state, review decisions, standing consent, conflict checks, and applied receipts. |
+| Server | Preserve provenance/status, revisions, identity, idempotency, claims, and receipts without relabeling proposals as accepted. |
+| Agent runtime | Discover tools, bind chat work, expose runner health, and pass contract fields unchanged. |
+| Instructions | Read supported accepted state, create proposals, and make claims no stronger than returned evidence. |
+
+Version rules:
+
+- `coaching-contract.v1.schema.json` is exact version `1.0.0`. Do not assume a
+  different patch or minor version is compatible.
+- Any contract change gets a new advertised exact version and schema artifact.
+  A breaking semantic change also requires a new major version.
+- During migration, layers may advertise more than one exact supported version.
+- Instructions must reject any unadvertised exact version for state-changing
+  work.
+- App, server, runtime, and instructions should advertise exact supported
+  contract versions during capability negotiation.
+- Legacy payload schemas such as `next_day_plan.v1`, REST `/v1`, server semver,
+  and watch payload versions are separate version axes. They do not prove
+  coaching contract v1 support.
+
+## Known runtime requirements
+
+These are requirements, not claims about shipped behavior:
+
+- provenance-rich accepted state in `get_planning_context`;
+- current proposals separate from accepted state, with applied proposal history
+  preserved inside app-authored receipts;
+- context, base, and applied revisions;
+- app-authored applied receipts;
+- request/result idempotency and payload-digest conflict checks;
+- atomic chat claim/lease plus reply idempotency;
+- runner or heartbeat status for nightly/background claims.
+
+Until each capability appears in `tools/list` and the returned schema, use the
+safe legacy behavior above.

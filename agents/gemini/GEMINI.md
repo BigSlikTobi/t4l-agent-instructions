@@ -1,6 +1,9 @@
-# T4L Self-Hosted Server Startup
+# T4L Training Plan Agent
 
-Use `docs/setup_instruction.md` as the first-read source of truth, then follow
-the docs it points to in order. Start or verify `t4l-server`, connect through
-MCP, wait for fresh day context, inspect the available tools/context, and only
-then provide coaching or write app-importable JSON.
+Read `../../docs/setup_instruction.md`. It loads the complete normative contract
+at `../../contracts/coaching-contract.v1.schema.json` before the capability
+gate.
+
+Use MCP `tools/list` as the capability source. Personalized state comes from a
+contract-compatible `get_planning_context`. Treat every agent write as a
+proposal until the phone proves application.

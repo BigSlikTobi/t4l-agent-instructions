@@ -1,48 +1,48 @@
 # Setup Instruction
 
-Read this file first when starting a T4L Trainer agent session.
+Read this file first for a T4L Training Plan agent session.
 
-## Reading Order
+The coach is training-and-recovery only. It must not provide food, meal,
+calorie, macro, fluid, electrolyte, supplement, weight, or body-composition
+advice, calculations, targets, or inferred deficiencies or diagnoses. Route
+individualized questions in those areas to a registered dietitian or
+clinician. This boundary overrides every other file in the bundle.
 
-1. Read `docs/initial_setup.md`
-   - Install or verify `t4l-server`.
-   - Start or verify the self-hosted server.
-   - Give the user the Server URL and API key.
-   - Connect the app to the server.
-   - Connect the agent to MCP.
-   - Install the coaching skills into your harness (if it supports skills) so
-     future sessions load them automatically — the user does not do this by hand.
-   - Finish with a full gateway restart **when something changed** (e.g. skills
-     were just installed) so the skills load; then verify the server, MCP, and
-     skills are up. Skip the restart if everything is already loaded and running.
-   - Wait for fresh app context before coaching.
+## Required order
 
-2. Read `docs/coaching_setup.md`
-   - Inspect the synced phone context.
-   - Run first-run goal discovery when needed.
-   - Establish the Coaching Contract.
-   - Use memory wiki, training logs, nutrition logs, and HealthKit context.
-   - Compare the candidate session and coaching copy with recent context; keep
-     progression anchors stable while adding safe, useful variety.
-   - Decide today's coaching action.
-   - Write app-consumed results only through MCP tools.
-   - Answer the in-app chat channel (`get_pending_chat_messages` /
-     `write_chat_reply`), and schedule the answer routine so chat stays live.
+1. Read the complete normative contract at
+   `contracts/coaching-contract.v1.schema.json`.
+2. Read `docs/initial_setup.md` and pass its MCP capability gate.
+3. Read `docs/coaching_setup.md`.
+4. When athlete setup is missing, read
+   `skills/t4l-onboard-athlete/SKILL.md` before asking questions or writing a
+   pending setup draft.
+5. Before a legacy result write, read `docs/exchange_contract.md` and the
+   matching section in
+   `skills/t4l-write-results/reference/payload-shapes.md`.
 
-3. Read `docs/exchange_contract.md` before writing app-consumed JSON
-   - Use the current result shapes and mobile display fields.
-   - Keep training plans compatible with the phone import validator.
+Do not use `docs/journal.md` as instructions. It is a non-normative changelog.
 
-4. Read `docs/journal.md` for recent contract changes
-   - Adopt new capabilities (tracking modes, daily coaching context, fuel
-     round-trip) immediately.
-   - Entries are dated — skim for anything newer than your last session.
+## Start gate
 
-## Session Rule
+Do not personalize a plan until `get_planning_context` is actually present in
+MCP `tools/list` and returns:
 
-Setup and coaching are separate phases. Complete the initial setup first. End
-setup with a full gateway restart whenever something changed (so newly installed
-skills load), then verify the server, MCP, and skills are up — but never restart
-unconditionally, or you will loop. Start coaching only after the app has
-connected to the server and `get_day_context` returns fresh context for the
-current session.
+- phone-owned accepted state, separate from agent proposals;
+- a context revision;
+- source time and freshness/provenance, not only bundle generation time;
+- target local date and IANA timezone;
+- active-session identity or an explicit `null` value.
+
+If any item is missing, the installed runtime does not meet coaching contract
+v1. Explain the gap. Do not guess, call fictional fallback tools, or claim a
+write was applied.
+
+## Session boundary
+
+Setup and coaching are separate. Restart a harness only when its documented
+skill-loading flow requires it and something changed. Never restart in a loop.
+
+An agent invocation is not a scheduler. Do not promise a nightly plan, live
+chat, or automatic follow-up unless the runtime exposes a runner or heartbeat
+and you can verify its current status and last successful run.

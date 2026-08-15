@@ -1,72 +1,83 @@
 ---
 name: t4l-answer-chat
-description: Use when the athlete has sent in-app chat messages. Drains pending chat via get_pending_chat_messages and replies with short, workout-aware answers via write_chat_reply.
+description: Use for a pending T4L chat turn. Binds work to one athlete message, uses a claim when supported, and preserves newer messages.
 ---
 
 # T4L Answer Chat
 
-The athlete chats with you **inside the app** — this replaces any third-party
-chat app. The self-hosted server relays the conversation over MCP. This skill is
-the **answer-time** behavior: how to reply well to a chat turn. The build/run
-side of the chat loop (model split, warm-loop hosting, polling, routing,
-freshness) lives in `docs/coaching_setup.md` — read it when building or tuning
-the loop, not on every reply.
+Requires `../../contracts/coaching-contract.v1.schema.json`, the chat rules in
+`../../docs/exchange_contract.md`, and accepted context from
+`get_planning_context`.
 
-Payload fields and the turn lifecycle: `docs/exchange_contract.md`
-("Live chat channel shape").
+## Concurrency gate
 
-## Routine
+Use multiple workers only when MCP advertises atomic claim/lease and idempotent
+reply support. A pending queue read is not a claim.
 
-1. `get_pending_chat_messages` → empty means nothing to do.
-2. For each pending message, **oldest first**:
-   - Read `get_day_context` (and `get_profile` / `get_app_snapshot` if needed),
-     plus recent history (`daily_snapshot:latest.recentLogs`), so the reply
-     reflects the athlete's real, current state — including a **live workout in
-     progress**. Re-read these each turn; never answer from a cached copy.
-   - Write a short, direct reply to the actual question.
-   - Post with `write_chat_reply`, passing the message's `seq` as `inReplyToSeq`
-     — that marks the turn answered so it is not returned again.
-3. **After replying**, if the turn carried durable, plan-relevant intent — an
-   explicit request, or a question you could not resolve — fold it into the
-   standing coaching notes: `get_coaching_notes` → merge (keep the chat `seq` as
-   `sourceSeq`) → `write_coaching_notes`. This keeps important intent available
-   after the bounded recent-chat window rolls forward. Do it **after** the reply
-   so it adds no latency, and only when there is something durable — skip
-   chit-chat.
+If only `get_pending_chat_messages` and `write_chat_reply` exist, require one
+externally serialized consumer for the conversation, backed by a single
+deployment or external lock. If exclusive ownership cannot be proved, do not
+write. Overlapping polls can double-reply.
 
-## How to answer
+## One-turn routine
 
-- **Conversational, not a document.** Tight, direct, no boilerplate. This is
-  live chat.
-- **Sound current.** Do not recycle stock openings, praise, apologies, or
-  sign-offs from recent chat. Lead with the fact that matters now. Repeat exact
-  safety wording only when consistency is useful.
-- **Workout-aware.** Ground answers in the synced context and recent logs, so
-  "how was my run?" / "what about Wednesday?" reflect real data.
-- **Never dead-end.** Do not tell the athlete "I couldn't find that" or "send me
-  what you did". If you lack the data or the turn needs deep analysis, that is an
-  **escalation**, not a reply — post a brief "give me a second…" and hand the
-  question (in memory, with its `seq`) to the reasoning model, which then posts
-  the real answer. Only after actually checking the full history/tools may you
-  say a fact genuinely isn't in the synced data — and say specifically what you
-  checked. Never invent health/log data.
-- **An escalation always concludes.** Once the ack is posted the turn leaves the
-  pending queue, so you own delivering the result: always `write_chat_reply` the
-  reasoning model's answer; if it errors, post a real status, never silence.
-- **Don't write plans from a casual question.** A chat answer is just
-  `write_chat_reply`. Switch to **t4l-write-results** only when the athlete asks
-  for app-importable output, and ask before writing app-consumed JSON that
-  changes goals, constraints, training direction, or nutrition targets.
-- **Capture durable intent, not chit-chat.** A reply answers the moment; the
-  *plan* needs the intent. Fold explicit requests and open questions into
-  coaching notes (`write_coaching_notes`) so the daily loop acts on them —
-  "how was my run?" or "thanks" needs no note.
-- **Safety first.** Pain, injury, dizziness, illness, or "should I push through
-  this?" get a careful, conservative answer (escalate when unsure) — never a
-  breezy reply.
-- **Safe to run often.** Answering a turn marks it `answered`, so repeated runs
-  never double-reply.
+1. Claim the oldest athlete message when a claim tool exists. Otherwise, in
+   single-worker mode, select the oldest pending message and treat it as the
+   only local job.
+2. Capture its exact content, conversation ID, message ID/`seq`, claim ID,
+   claim expiry, and reply idempotency key when those fields exist.
+3. Call `get_planning_context` fresh. Do not switch to a newer chat message
+   while reading context or reasoning.
+4. Answer the captured question. Use synced facts only. No live mid-set claim
+   unless the accepted context contains a fresh phone-sourced set event.
+5. Post the answer against the exact claimed message. In the legacy tool, always
+   pass its original `seq` as `inReplyToSeq`.
+6. Finish or release the exact claim when the protocol supports it. Then take
+   the next message.
 
-Routing (answer-or-escalate, the structured escalate signal, history digest),
-two-tier ack/escalate mechanics, model split, and loop hosting are all detailed
-in `docs/coaching_setup.md`.
+Never omit `inReplyToSeq` in legacy mode. Never acknowledge or mark a newer,
+unrelated athlete message as part of the current job.
+
+## Reply style
+
+- Keep it short and direct.
+- Separate synced facts from assumptions.
+- Do not invent health, history, or current-set data.
+- A normal chat answer uses `write_chat_reply`, not a plan-result writer.
+- A requested plan remains a proposal and follows review rules. A chat `seq` is
+  not a contract `requestId`; do not emit the proposal until planning context
+  contains the matching phone-authored current request.
+- Pain, injury, dizziness, illness, or push-through questions get a conservative
+  answer and escalation when needed.
+- Stay inside training and recovery. Never provide food, meal, calorie, macro,
+  fluid, electrolyte, supplement, weight, or body-composition advice,
+  calculations, targets, or inferred deficiencies or diagnoses. Reply with the
+  fixed scope boundary and refer individualized questions to a registered
+  dietitian or clinician.
+
+## Escalation
+
+Pass the captured question and all claim/message IDs directly to the heavy
+worker. Do not re-poll the queue to rediscover it.
+
+If an acknowledgement is posted, bind it to the original message. Bind the
+final answer to that same message too. The arrival of a newer message does not
+change the target.
+
+Legacy chat has no durable processing state. An acknowledgement can remove a
+turn from the pending queue before the heavy answer exists. Prefer one final
+reply in legacy mode. If an acknowledgement is unavoidable, keep the worker
+alive through the final write and report a real failure status if reasoning
+fails. Do not leave silence.
+
+## Retry and idempotency
+
+- With an idempotency key, retry the same logical reply with the same key and
+  content digest.
+- New content gets a new key.
+- A duplicate key with different content is a conflict.
+- Without idempotency, do not blindly retry an ambiguous timeout. Inspect fresh
+  planning/chat evidence first. If delivery remains unknown, escalate to the
+  athlete or operator instead of risking a duplicate.
+- If a claim expires, do not write under it. Reclaim through the protocol or
+  leave the message for another worker.

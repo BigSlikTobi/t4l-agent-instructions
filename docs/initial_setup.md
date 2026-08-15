@@ -1,115 +1,136 @@
 # Initial Setup
 
-Use this guide for the one-time or per-session connection setup between the
-agent, the self-hosted T4L server, and the T4L Trainer app.
+Use this once to connect the agent, self-hosted server, and T4L app. The server
+and app are separate products. These instructions cannot add missing runtime
+behavior.
 
-## Server Setup
+## 1. Connect
 
-1. Verify `t4l-server` is installed:
-   ```bash
-   command -v t4l-server
-   ```
-2. If the server is missing, ask the user before installing it:
-   ```bash
-   pipx install t4l-server
-   ```
-3. Start the server if it is not already running:
-   ```bash
-   t4l-server serve --data-dir ~/T4LServerData
-   ```
-4. Give the user the printed Server URL and API key so they can enter them in
-   the T4L Trainer Settings screen.
-5. Connect to the printed MCP URL with the same API key.
-6. Wait until the user connects the app and migrates or pushes fresh context.
-   Do not coach from memory alone.
+1. Use the agent runtime and model the customer already configured. Do not
+   choose, switch, download, or call a model provider from these instructions.
+2. The OpenClaw owner installs the exact pinned `t4l-connect` bootstrap package
+   through the OpenClaw Control UI or host CLI. This is the only manual software
+   approval. Do not ask the model to install it from chat.
+3. The bootstrap accepts only its release-built policy. That policy pins a
+   signed release manifest at an HTTPS URL, its SHA-256, signing key, release identity, and
+   every artifact digest. Repository URLs and commits are source metadata, not
+   executable install instructions. Never clone or install a mutable branch.
+4. The athlete enters only the reachable trusted HTTPS OpenClaw address in the
+   app. The app creates its device key and one pending pairing code. A local
+   install must already be reachable through trusted HTTPS, such as Tailscale
+   Serve; there is no T4L relay fallback.
+5. The athlete sends `/t4l connect XXXX-XXXX` through an already authenticated
+   owner channel. The runtime adapter must handle this before model input and
+   bind the verified channel, account, and sender identity to that phone request.
+6. Deterministic bootstrap code installs one isolated server and instruction
+   bundle, generates host-only credentials, configures MCP and service startup,
+   verifies chat and coaching capabilities, and adopts the original phone
+   request. It must resume safely or roll back on failure.
+7. The phone proves possession of its key, receives only the exact `chat`,
+   `sync`, and `status` scopes, then asks the verified coach to begin athlete
+   onboarding. Ask the app to sync current phone state.
 
-## Install Coaching Skills (one-time, self-service)
+Never request or place a provider key, runtime administrator credential, MCP
+key, SSH credential, or connector runtime token on the phone. The legacy manual
+URL/API-key path is an advanced compatibility path, not normal onboarding.
 
-If your harness supports Agent Skills (the `SKILL.md` convention), install the
-T4L coaching skills into your own skills directory so future sessions load them
-automatically. **Do this for the user — they do not run git or copy files by
-hand.**
+The model does not choose releases, URLs, commands, ports, service files,
+credentials, or rollback actions. Those are host-installer decisions. If the
+signed policy is missing or verification fails, stop and report that setup is
+not ready.
 
-1. Locate your harness's skills directory. Common locations:
-   - Hermes: `~/.hermes/skills/`
-   - OpenClaw: `~/.openclaw/workspace/skills/`
-   - Claude Code: `.claude/skills/` (project) or `~/.claude/skills/` (global)
-   - Gemini CLI / OpenCode: their skills dir (e.g. `.agents/skills/`,
-     `.opencode/skills/`, or `~/.gemini/...`).
+Command existence is not a capability check. A stale server can start cleanly
+while exposing the wrong MCP surface.
 
-   If unsure, check your harness docs for "skills directory".
-2. For each skill folder in this repo's `skills/` directory —
-   `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
-   `t4l-answer-chat` — make it available there. Prefer a symlink so `git pull`
-   keeps it current; copy the
-   folder if symlinks are unsupported. If you only have remote access to this
-   repo, fetch each skill's `SKILL.md` (plus `t4l-write-results/reference/` and
-   `scripts/`) and write them into the skills directory.
-3. Make it idempotent: if a T4L skill is already present, refresh it rather than
-   creating a duplicate.
-4. Skills are scanned at harness **startup**, so a freshly installed skill takes
-   effect from your **next** session. Reload or restart the harness if it
-   supports that. For this first session, keep following these docs directly —
-   they are the source the skills were built from.
+## 2. Discover the real MCP surface
 
-If your harness does not support skills, skip this section. The `docs/` workflow
-works exactly as before.
+Use MCP initialization and `tools/list`. Never copy a tool name from an old
+journal entry or assume it exists from a package version.
 
-## Source Of Truth
+Personalized coaching requires `get_planning_context`. Its response must meet
+the `planning_context` branch of
+`contracts/coaching-contract.v1.schema.json`. Its `acceptedState` must meet the
+phone-owned `accepted_state` branch with all provenance and state-boundary
+fields.
 
-Use MCP tools as the source of truth for the session. Treat `get_day_context`
-as the primary current-day context. Use `get_app_snapshot`, `get_profile`, and
-`get_pending_requests` as supporting context.
+For the workflow being run, also verify the named write or chat tool is present.
+Current adapter names can include:
 
-Inspect the available context before coaching:
+- `write_training_block_plan`
+- `write_next_day_plan`
+- `get_pending_chat_messages`
+- `write_chat_reply`
 
-- `day_context`: primary current-day context.
-- `daily_snapshot`: compact latest app snapshot when present.
-- `app_snapshot`: full phone migration/sync payload when present.
-- `profile`: athlete profile, goals, equipment, schedule, constraints, and
-  preferences.
-- `activeBlock`: current accepted training block.
-- `nextWorkout`: next planned workout.
-- recent training logs and latest workout log.
-- recent nutrition logs and latest nutrition entry.
-- HealthKit activity summaries and activity sessions.
-- active `memoryWiki` entries.
-- pending requests such as training block, fuel guidance, or nutrition analysis.
+Nutrition and fuel read/write tools are outside the coach scope and must not be
+advertised or called.
 
-For daily planning, the source of truth also supplies the comparison window.
-Use recent logs, the accepted block, the prior next-day plan, coaching notes,
-and recent chat to check whether today's session or wording is a stale repeat.
-Do not decide that a plan is fresh from the current-day context alone.
+This list is not proof. `tools/list` is proof. Never instruct the model to call
+direct snapshot, profile, memory, HealthKit, daily-snapshot, or live-set tools.
+This instruction layer has no contract for them. Accepted athlete data comes
+through the planning context.
 
-Missing files, missing metrics, missing HealthKit permissions, or absent logs
-are unknown, not zero. If `day_context` is missing or stale, ask the user to
-open the app and push fresh context before coaching.
+## 3. Validate the planning context
 
-## Finish Setup: Restart the Gateway and Verify
+Read `get_planning_context` once after sync. Check:
 
-Skills are scanned at startup, so finish setup with a **full gateway restart** to
-load any freshly installed skills and confirm the whole stack comes back up.
+- the exact contract version is advertised and supported;
+- the phone-owned accepted state is clearly marked;
+- `contextRevision` is present;
+- every coaching fact has usable provenance, including `sourceTime` and
+  freshness status;
+- `target.localDate` and `target.timeZone` are present;
+- `activeSessionId` is present or explicitly `null`;
+- proposals are not presented as the accepted block or accepted day plan;
+- `currentRequests` contains only unexpired `pending` or `in_review` records;
+- consumed, rejected, and expired records stay terminal in `requestHistory`.
 
-**Restart only when something changed this setup** — a skill was just installed
-or updated, or the server/MCP was just started. If the T4L skills already appear
-in your catalog and the server and MCP are already up, setup is complete; **do
-not restart again.** A restart makes you re-read these docs, so an unconditional
-restart would loop.
+A bundle-level `generatedAt` says when the server assembled JSON. It does not
+say when the phone measured or accepted a fact.
 
-When a restart is warranted:
+If the response fails these checks, stop personalized/state-changing coaching.
+The safe response is to name the missing contract support and ask for a
+compatible runtime or a fresh app sync. Do not stitch together fictional
+fallback reads.
 
-1. Perform a full gateway/harness restart — a real process restart so skills are
-   re-scanned, not just a new chat.
-2. The restart ends this session; continue in the fresh one.
-3. Verify before coaching:
-   - the T4L server is still running and reachable at the printed URL,
-   - MCP reconnects and `get_day_context` returns,
-   - the skills `t4l-onboard-athlete`, `t4l-coach-daily`, `t4l-write-results`,
-     and `t4l-answer-chat` appear in your catalog.
+## 4. Chat concurrency gate
 
-   If a skill is missing, re-run "Install Coaching Skills", restart once more,
-   then proceed.
+`get_pending_chat_messages` is a queue read, not an atomic claim, unless the
+tool schema explicitly returns a claim/lease token and expiry.
 
-If your harness has no separate gateway, restarting the harness/CLI achieves the
-same re-scan. If it cannot restart itself, ask the user to restart it once, then
-continue.
+- With atomic claim and idempotent reply support, workers may run concurrently.
+- Without both, chat writes require one externally serialized consumer for that
+  conversation, backed by a single deployment or an external lock.
+- If exclusive ownership cannot be proved, do not poll and write chat replies.
+- Never describe polling alone as safe from duplicate replies.
+
+See `skills/t4l-answer-chat/SKILL.md` for turn sequencing.
+
+## 5. Runner gate
+
+Only claim background or nightly operation when an advertised runtime runner or
+heartbeat shows all of these:
+
+- enabled job identity;
+- expected cadence and timezone;
+- last successful run;
+- current health or next scheduled run.
+
+Without that evidence, say the agent runs only when invoked. A loop example in
+documentation is not a deployed runner.
+
+## 6. Install portable skills when supported
+
+If the harness supports `SKILL.md`, keep this repo layout intact. Register its
+`skills/` directory as a skill source, or symlink the four skill folders from
+this checkout into the harness's documented skills directory. Refresh an
+existing link instead of creating duplicates.
+
+Do not copy a skill folder by itself. Each adapter depends on the one contract
+under `contracts/` and procedure docs under `docs/`. If the harness cannot use
+links or external skill sources, copy the whole repo while preserving those
+relative paths.
+
+Restart only if that harness loads skills at startup and files changed.
+
+The skills are adapters. They do not relax the capability gate or replace the
+normative contract.

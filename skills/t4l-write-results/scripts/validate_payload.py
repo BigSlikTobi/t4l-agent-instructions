@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Validate a T4L app-consumed result before writing it through an MCP tool.
+"""Validate a legacy T4L result payload body before an MCP proposal write.
 
-The T4L app imports a pending result exactly once; a result it cannot read is
-discarded with no automatic retry. This script reproduces the app's documented
-import rules (and the contract shape) so the coaching agent can self-check a
-payload BEFORE calling write_training_block_plan / write_next_day_plan /
-write_fuel_guidance / write_nutrition_analysis_result.
+This script checks the documented legacy body rules. It does not validate the
+coaching-contract envelope and cannot prove review, import, or phone application.
 
 Usage:
     python validate_payload.py <kind> path/to/payload.json [--recent-context context.json]
@@ -13,8 +10,8 @@ Usage:
 
 <kind>: training_block_plan | next_day_plan | fuel_guidance | nutrition_analysis_result
 
-ERROR lines = the app WILL discard this payload. Fix all of them.
-WARN  lines = contract or coaching-quality concerns that need review but are not fatal.
+ERROR lines = the body violates a known legacy import rule. Fix all of them.
+WARN  lines = compatibility or coaching-quality concerns that need review.
 
 Exit code: 1 on any ERROR (or bad input), else 0.
 Standard library only — no dependencies.
@@ -22,6 +19,7 @@ Standard library only — no dependencies.
 from __future__ import annotations
 
 import argparse
+from datetime import date, datetime
 import json
 import re
 import sys
@@ -36,7 +34,16 @@ KINDS = (
 VALID_STYLES = {"rugby", "boxer", "hybrid", "strengthHypertrophy", "conditioning", "custom"}
 VALID_TRACKING = {"weightAndReps", "repsOnly", "timeOnly"}
 VALID_SIGNALS = {"green", "hold", "fuel", "deload"}
+EXPECTED_SCHEMAS = {
+    "training_block_plan": "training_block_plan.v1",
+    "next_day_plan": "next_day_plan.v1",
+    "fuel_guidance": "fuel_guidance.v1",
+    "nutrition_analysis_result": "nutrition_analysis_result.v1",
+}
 GROUP_TYPES = {"superset", "circuit"}
+YOUTUBE_SHORT_URL_RE = re.compile(
+    r"^https://www\.youtube\.com/shorts/[A-Za-z0-9_-]{11}$"
+)
 REUSED_COPY_FIELDS = {
     "dailyMotto": "daily motto",
     "headline": "summary headline",
@@ -46,6 +53,63 @@ REUSED_COPY_FIELDS = {
     "yesterdayRead": "fuel recap",
     "signalSub": "fuel signal copy",
 }
+
+CONTRACT_SCHEMA = "t4l.coaching-contract.v1"
+CONTRACT_VERSION = "1.0.0"
+ACCEPTED_STATE_KEYS = {
+    "schema",
+    "contractVersion",
+    "messageType",
+    "producer",
+    "contextRevision",
+    "generatedAt",
+    "sources",
+    "target",
+    "activeSessionId",
+    "activeSession",
+    "state",
+}
+PLANNING_CONTEXT_KEYS = {
+    "schema",
+    "contractVersion",
+    "messageType",
+    "producer",
+    "generatedAt",
+    "acceptedState",
+    "proposals",
+    "appliedReceipts",
+    "currentRequests",
+    "requestHistory",
+}
+SOURCE_KEYS = {
+    "sourceId",
+    "kind",
+    "path",
+    "fields",
+    "sourceRevision",
+    "artifactId",
+    "sourceTime",
+    "receivedAt",
+    "availability",
+    "freshness",
+}
+SOURCE_KINDS = {
+    "phone_state",
+    "training_log",
+    "nutrition_log",
+    "health_activity",
+    "athlete_profile",
+    "athlete_request",
+    "athlete_chat",
+    "other",
+}
+CONTEXT_REVISION_RE = re.compile(r"^ctx_[0-9]{1,20}_[a-f0-9]{8,64}$")
+SOURCE_ID_RE = re.compile(r"^src_[a-z0-9]{8,64}$")
+SOURCE_REVISION_RE = re.compile(r"^(?:ctx_[0-9]{1,20}_[a-f0-9]{8,64}|srcv_[a-z0-9]{8,64})$")
+ARTIFACT_ID_RE = re.compile(r"^art_[a-z0-9][a-z0-9:._-]{7,127}$")
+SESSION_ID_RE = re.compile(r"^ses_[a-z0-9]{16,64}$")
+TIME_ZONE_RE = re.compile(r"^(?:UTC|[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)+)$")
+JSON_POINTER_RE = re.compile(r"^(?:/(?:[^~/]|~[01])*)+$")
 
 BLOCK_REQUIRED = ["id", "style", "title", "durationWeeks", "currentWeek", "weeklyFocus",
                   "measurableTargets", "workouts", "createdBy", "createdAt"]
@@ -75,10 +139,47 @@ def is_nonempty_list(v):
     return isinstance(v, list) and len(v) > 0
 
 
-def check_schema(payload, r):
+def is_nonempty_string_list(v):
+    return is_nonempty_list(v) and all(
+        isinstance(item, str) and bool(item.strip()) for item in v
+    )
+
+
+def check_schema(kind, payload, r):
     schema = payload.get("schema")
     if schema is not None and (not isinstance(schema, str) or not schema.strip()):
         r.error("'schema' must be a non-empty string when present (or omit it).")
+    elif schema is not None and schema != EXPECTED_SCHEMAS[kind]:
+        r.error(
+            f"schema {schema!r} is not the documented legacy schema "
+            f"{EXPECTED_SCHEMAS[kind]!r}."
+        )
+
+
+def validate_media(media, where, r):
+    if not isinstance(media, dict):
+        r.error(f"{where}: exercise must include a 'media' object with video guidance.")
+        return
+
+    url = media.get("explainerUrl")
+    if not isinstance(url, str) or not url.strip():
+        r.error(f"{where}.media: missing YouTube Shorts 'explainerUrl'.")
+    elif YOUTUBE_SHORT_URL_RE.fullmatch(url.strip()) is None:
+        r.error(
+            f"{where}.media.explainerUrl: must be a canonical YouTube Shorts URL "
+            "like https://www.youtube.com/shorts/AbCdEf123_-."
+        )
+    if "youtubeUrl" in media or "videoUrl" in media:
+        r.error(
+            f"{where}.media: use only canonical 'explainerUrl'; "
+            "youtubeUrl/videoUrl aliases are invalid for generated plans."
+        )
+
+    if not isinstance(media.get("setup"), str) or not media["setup"].strip():
+        r.error(f"{where}.media: 'setup' must be a non-empty string.")
+    for field in ("cues", "commonMistakes"):
+        if not is_nonempty_string_list(media.get(field)):
+            r.error(f"{where}.media: '{field}' must be a non-empty string list.")
 
 
 def validate_exercise(ex, where, r):
@@ -93,6 +194,7 @@ def validate_exercise(ex, where, r):
         r.warn(f"{where}: trackingMode '{tm}' not in {sorted(VALID_TRACKING)}.")
     if tm == "timeOnly" and not ex.get("targetDurationSeconds"):
         r.warn(f"{where}: timeOnly exercise should set 'targetDurationSeconds'.")
+    validate_media(ex.get("media"), where, r)
 
 
 def validate_workout_item(item, where, r):
@@ -116,8 +218,15 @@ def validate_workout_item(item, where, r):
         r.error(f"{where}: {item_type} must contain child exercises.")
         return
     rounds = item.get("rounds")
-    if not is_number(rounds) or rounds < 1:
-        r.error(f"{where}: {item_type} 'rounds' must be a number >= 1.")
+    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+        r.error(f"{where}: {item_type} 'rounds' must be an integer >= 1.")
+    group_rest = item.get("restSeconds")
+    if (
+        not isinstance(group_rest, int)
+        or isinstance(group_rest, bool)
+        or group_rest < 0
+    ):
+        r.error(f"{where}: {item_type} 'restSeconds' must be an integer >= 0.")
     if item_type == "superset" and len(exercises) != 2:
         r.error(f"{where}: superset must contain exactly 2 exercises.")
     if item_type == "circuit" and len(exercises) < 3:
@@ -125,6 +234,23 @@ def validate_workout_item(item, where, r):
     if not item.get("groupId"):
         r.warn(f"{where}: grouped item should include stable 'groupId'.")
     for i, ex in enumerate(exercises):
+        if isinstance(ex, dict):
+            child_sets = ex.get("sets")
+            if child_sets not in (None, 1) or isinstance(child_sets, bool):
+                r.error(
+                    f"{where} {item_type}.exercise[{i}]: child 'sets' must be 1 "
+                    "or omitted; group 'rounds' owns repetition."
+                )
+            child_rest = ex.get("restSeconds")
+            if (
+                not isinstance(child_rest, int)
+                or isinstance(child_rest, bool)
+                or child_rest < 0
+            ):
+                r.error(
+                    f"{where} {item_type}.exercise[{i}]: child 'restSeconds' "
+                    "must be an integer >= 0."
+                )
         validate_exercise(ex, f"{where} {item_type}.exercise[{i}]", r)
 
 
@@ -170,14 +296,44 @@ def validate_training_block_plan(payload, r):
     if style is not None and style not in VALID_STYLES:
         r.warn(f"block style '{style}' not in {sorted(VALID_STYLES)}.")
     dw = block.get("durationWeeks")
-    if not is_number(dw) or dw < 1:
-        r.error("block 'durationWeeks' must be a number >= 1 (app discards this).")
+    valid_duration = isinstance(dw, int) and not isinstance(dw, bool) and dw >= 1
+    if not valid_duration:
+        r.error("block 'durationWeeks' must be an integer >= 1 (app discards this).")
+    current_week = block.get("currentWeek")
+    if (
+        not isinstance(current_week, int)
+        or isinstance(current_week, bool)
+        or current_week < 1
+        or (valid_duration and current_week > dw)
+    ):
+        r.error("block 'currentWeek' must be an integer within the declared block.")
+    for field in ("weeklyFocus", "measurableTargets"):
+        if not is_nonempty_string_list(block.get(field)):
+            r.error(f"block '{field}' must be a non-empty string list.")
     workouts = block.get("workouts")
     if not is_nonempty_list(workouts):
         r.error("block 'workouts' must be a non-empty list (app discards this).")
     else:
+        covered_weeks = set()
         for i, w in enumerate(workouts):
             validate_workout(w, f"workout[{i}]", r)
+            if not isinstance(w, dict):
+                continue
+            week = w.get("week")
+            if not isinstance(week, int) or isinstance(week, bool):
+                r.error(f"workout[{i}]: 'week' must be an integer.")
+            elif not valid_duration or not 1 <= week <= dw:
+                r.error(f"workout[{i}]: 'week' is outside the declared block.")
+            else:
+                covered_weeks.add(week)
+        if valid_duration:
+            missing_weeks = sorted(set(range(1, dw + 1)) - covered_weeks)
+            if missing_weeks:
+                r.error(
+                    "block has no workout for declared week(s): "
+                    + ", ".join(str(week) for week in missing_weeks)
+                    + "."
+                )
     validate_goals(payload.get("goals") or block.get("goals"), r)
 
 
@@ -197,7 +353,7 @@ def validate_next_day_plan(payload, r):
 
 
 def validate_fuel_guidance(payload, r):
-    # Always accepted by the app; still sanity-check for usefulness.
+    # The legacy body has no hard import fields documented here. Check usefulness.
     signal = payload.get("signal")
     if signal is not None and signal not in VALID_SIGNALS:
         r.warn(f"fuel_guidance signal '{signal}' not in {sorted(VALID_SIGNALS)}.")
@@ -349,8 +505,305 @@ def collect_meal_names(value, output):
             collect_meal_names(child, output)
 
 
+def parse_contract_time(value):
+    if not isinstance(value, str):
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+def is_contract_integer(value, minimum=None, maximum=None):
+    if not isinstance(value, int) or isinstance(value, bool):
+        return False
+    if minimum is not None and value < minimum:
+        return False
+    if maximum is not None and value > maximum:
+        return False
+    return True
+
+
+def require_exact_keys(value, expected, where, errors):
+    if not isinstance(value, dict):
+        errors.append(f"{where} must be an object")
+        return False
+    missing = sorted(expected - set(value), key=str)
+    unexpected = sorted(set(value) - expected, key=str)
+    if missing:
+        errors.append(f"{where} is missing {', '.join(missing)}")
+    if unexpected:
+        errors.append(f"{where} has unexpected fields {', '.join(unexpected)}")
+    return not missing and not unexpected
+
+
+def source_record_errors(source, generated_at, index):
+    where = f"sources[{index}]"
+    errors = []
+    if not require_exact_keys(source, SOURCE_KEYS, where, errors):
+        return errors
+
+    if not isinstance(source["kind"], str) or source["kind"] not in SOURCE_KINDS:
+        errors.append(f"{where}.kind is invalid")
+    if (
+        not isinstance(source["path"], str)
+        or not 1 <= len(source["path"]) <= 256
+        or JSON_POINTER_RE.fullmatch(source["path"]) is None
+    ):
+        errors.append(f"{where}.path must be an RFC 6901 JSON Pointer")
+    fields = source["fields"]
+    if (
+        not is_nonempty_list(fields)
+        or any(
+            not isinstance(field, str)
+            or not 1 <= len(field) <= 160
+            or JSON_POINTER_RE.fullmatch(field) is None
+            for field in fields
+        )
+        or len(set(fields)) != len(fields)
+    ):
+        errors.append(f"{where}.fields must contain unique RFC 6901 JSON Pointers")
+
+    freshness = source["freshness"]
+    if not require_exact_keys(
+        freshness,
+        {"evaluatedAt", "maxAgeSeconds", "status"},
+        f"{where}.freshness",
+        errors,
+    ):
+        return errors
+    evaluated_at = parse_contract_time(freshness["evaluatedAt"])
+    received_at = parse_contract_time(source["receivedAt"])
+    max_age = freshness["maxAgeSeconds"]
+    if evaluated_at is None:
+        errors.append(f"{where}.freshness.evaluatedAt is not a timezone-aware timestamp")
+    if received_at is None:
+        errors.append(f"{where}.receivedAt is not a timezone-aware timestamp")
+    if not is_contract_integer(max_age, 1, 86400):
+        errors.append(f"{where}.freshness.maxAgeSeconds must be within 1..86400")
+
+    availability = source["availability"]
+    if not isinstance(availability, str) or availability not in {"available", "missing", "unknown"}:
+        errors.append(f"{where}.availability is invalid")
+        return errors
+
+    if availability == "available":
+        source_time = parse_contract_time(source["sourceTime"])
+        if not isinstance(source["sourceId"], str) or SOURCE_ID_RE.fullmatch(source["sourceId"]) is None:
+            errors.append(f"{where}.sourceId is invalid for an available source")
+        if source_time is None:
+            errors.append(f"{where}.sourceTime is required and must be timezone-aware")
+        source_revision = source["sourceRevision"]
+        artifact_id = source["artifactId"]
+        valid_revision = (
+            isinstance(source_revision, str)
+            and SOURCE_REVISION_RE.fullmatch(source_revision) is not None
+        )
+        valid_artifact = (
+            isinstance(artifact_id, str)
+            and ARTIFACT_ID_RE.fullmatch(artifact_id) is not None
+        )
+        if source_revision is not None and not valid_revision:
+            errors.append(f"{where}.sourceRevision is invalid")
+        if artifact_id is not None and not valid_artifact:
+            errors.append(f"{where}.artifactId is invalid")
+        if not valid_revision:
+            errors.append(f"{where} needs an immutable sourceRevision")
+        if (
+            not isinstance(freshness["status"], str)
+            or freshness["status"] not in {"fresh", "stale"}
+        ):
+            errors.append(f"{where}.freshness.status is invalid for an available source")
+        if source_time is not None and received_at is not None and evaluated_at is not None and generated_at:
+            if not source_time <= received_at <= evaluated_at <= generated_at:
+                errors.append(f"{where} source/received/evaluated/generated order is invalid")
+            elif is_contract_integer(max_age, 1, 86400):
+                expected = "fresh" if (evaluated_at - source_time).total_seconds() <= max_age else "stale"
+                if freshness["status"] != expected:
+                    errors.append(f"{where}.freshness.status does not match source age")
+    else:
+        for field in ("sourceId", "sourceRevision", "artifactId", "sourceTime"):
+            if source[field] is not None:
+                errors.append(f"{where}.{field} must be null when the source is not available")
+        if freshness["status"] != "unknown":
+            errors.append(f"{where}.freshness.status must be unknown when unavailable")
+        if received_at is not None and evaluated_at is not None and generated_at:
+            if not received_at <= evaluated_at <= generated_at:
+                errors.append(f"{where} received/evaluated/generated order is invalid")
+    return errors
+
+
+def target_errors(target):
+    errors = []
+    if not require_exact_keys(target, {"localDate", "timeZone", "sessionId"}, "target", errors):
+        return errors
+    try:
+        valid_date = (
+            isinstance(target["localDate"], str)
+            and date.fromisoformat(target["localDate"]).isoformat() == target["localDate"]
+        )
+    except ValueError:
+        valid_date = False
+    if not valid_date:
+        errors.append("target.localDate is not a canonical ISO date")
+    if not isinstance(target["timeZone"], str) or TIME_ZONE_RE.fullmatch(target["timeZone"]) is None:
+        errors.append("target.timeZone is not an IANA time zone")
+    session_id = target["sessionId"]
+    if session_id is not None and (
+        not isinstance(session_id, str) or SESSION_ID_RE.fullmatch(session_id) is None
+    ):
+        errors.append("target.sessionId is invalid")
+    return errors
+
+
+def accepted_state_comparison_errors(document):
+    errors = []
+    if not require_exact_keys(document, ACCEPTED_STATE_KEYS, "accepted_state", errors):
+        return errors
+    if document["schema"] != CONTRACT_SCHEMA or document["contractVersion"] != CONTRACT_VERSION:
+        errors.append("accepted_state contract identity is invalid")
+    if document["messageType"] != "accepted_state" or document["producer"] != "phone":
+        errors.append("accepted_state must be phone-authored")
+    if (
+        not isinstance(document["contextRevision"], str)
+        or CONTEXT_REVISION_RE.fullmatch(document["contextRevision"]) is None
+    ):
+        errors.append("accepted_state.contextRevision is invalid")
+    generated_at = parse_contract_time(document["generatedAt"])
+    if generated_at is None:
+        errors.append("accepted_state.generatedAt is not a timezone-aware timestamp")
+    errors.extend(target_errors(document["target"]))
+
+    active_id = document["activeSessionId"]
+    active = document["activeSession"]
+    if active_id is None:
+        if active is not None:
+            errors.append("activeSession must be null when activeSessionId is null")
+    elif not isinstance(active_id, str) or SESSION_ID_RE.fullmatch(active_id) is None:
+        errors.append("activeSessionId is invalid")
+    elif not isinstance(active, dict) or set(active) != {"sessionId", "startedAt"}:
+        errors.append("activeSession must contain sessionId and startedAt")
+    else:
+        if active["sessionId"] != active_id:
+            errors.append("activeSessionId does not match activeSession.sessionId")
+        if parse_contract_time(active["startedAt"]) is None:
+            errors.append("activeSession.startedAt is not a timezone-aware timestamp")
+
+    state = document["state"]
+    if not isinstance(state, dict):
+        errors.append("accepted_state.state must be an object")
+        return errors
+    required_state = {"activeBlock", "nextWorkout", "goals", "constraints", "standingConsents"}
+    missing_state = sorted(required_state - set(state))
+    if missing_state:
+        errors.append(f"accepted_state.state is missing {', '.join(missing_state)}")
+    for field in ("activeBlock", "nextWorkout", "goals"):
+        if field in state and state[field] is not None and not isinstance(state[field], dict):
+            errors.append(f"accepted_state.state.{field} must be an object or null")
+    if "constraints" in state and (
+        not isinstance(state["constraints"], list)
+        or any(not isinstance(item, dict) for item in state["constraints"])
+    ):
+        errors.append("accepted_state.state.constraints must be an array of objects")
+    if "standingConsents" in state and (
+        not isinstance(state["standingConsents"], list)
+        or any(not isinstance(item, dict) for item in state["standingConsents"])
+    ):
+        errors.append("accepted_state.state.standingConsents must be an array of objects")
+
+    sources = document["sources"]
+    if not is_nonempty_list(sources):
+        errors.append("accepted_state.sources must be a non-empty array")
+        return errors
+    for index, source in enumerate(sources):
+        errors.extend(source_record_errors(source, generated_at, index))
+
+    for field, value in state.items():
+        escaped = field.replace("~", "~0").replace("/", "~1")
+        pointer = f"/state/{escaped}"
+        covering = [
+            source for source in sources
+            if isinstance(source, dict)
+            and isinstance(source.get("fields"), list)
+            and pointer in source["fields"]
+        ]
+        if not covering:
+            errors.append(f"accepted_state{pointer} has no field-level provenance")
+        elif value is not None and not any(source.get("availability") == "available" for source in covering):
+            errors.append(f"accepted_state{pointer} has no available provenance source")
+    return errors
+
+
+def planning_context_comparison_errors(document):
+    errors = []
+    if not require_exact_keys(document, PLANNING_CONTEXT_KEYS, "planning_context", errors):
+        return errors
+    if document["schema"] != CONTRACT_SCHEMA or document["contractVersion"] != CONTRACT_VERSION:
+        errors.append("planning_context contract identity is invalid")
+    if document["messageType"] != "planning_context" or document["producer"] != "server":
+        errors.append("planning_context must be server-authored")
+    generated_at = parse_contract_time(document["generatedAt"])
+    if generated_at is None:
+        errors.append("planning_context.generatedAt is not a timezone-aware timestamp")
+    for field in ("proposals", "appliedReceipts", "currentRequests", "requestHistory"):
+        if not isinstance(document[field], list):
+            errors.append(f"planning_context.{field} must be an array")
+    accepted = document["acceptedState"]
+    errors.extend(accepted_state_comparison_errors(accepted))
+    accepted_generated = parse_contract_time(accepted.get("generatedAt")) if isinstance(accepted, dict) else None
+    if generated_at is not None and accepted_generated is not None and accepted_generated > generated_at:
+        errors.append("accepted_state cannot be newer than its planning_context")
+    return errors
+
+
+def accepted_comparison_scope(recent_context, r):
+    """Return only structurally valid, provenance-covered phone-accepted state."""
+    if not isinstance(recent_context, dict):
+        r.warn("recent comparison input is not a contract object; comparison skipped.")
+        return {}
+
+    is_contract_v1 = (
+        recent_context.get("schema") == "t4l.coaching-contract.v1"
+        and recent_context.get("contractVersion") == "1.0.0"
+    )
+    if is_contract_v1 and recent_context.get("messageType") == "accepted_state":
+        errors = accepted_state_comparison_errors(recent_context)
+        if not errors:
+            return recent_context["state"]
+        r.warn(
+            "recent comparison accepted_state has invalid contract structure or provenance; "
+            f"comparison skipped ({errors[0]})."
+        )
+        return {}
+
+    if is_contract_v1 and recent_context.get("messageType") == "planning_context":
+        errors = planning_context_comparison_errors(recent_context)
+        if not errors:
+            return recent_context["acceptedState"]["state"]
+        r.warn(
+            "recent comparison planning_context has invalid contract structure or provenance; "
+            f"comparison skipped ({errors[0]})."
+        )
+        return {}
+
+    if recent_context.get("schema") == "planning_context.v1":
+        r.warn(
+            "legacy planning_context.v1 does not prove accepted-state provenance; "
+            "comparison is skipped and agent result slots are ignored."
+        )
+        return {}
+
+    r.warn("recent comparison input is not coaching contract v1 accepted state; comparison skipped.")
+    return {}
+
+
 def validate_recent_comparison(kind, payload, recent_context, r):
     """Warn about obvious stale repeats. Human judgment still owns safe novelty."""
+    recent_context = accepted_comparison_scope(recent_context, r)
     candidates = candidate_workouts(kind, payload)
     recent_workouts = find_workouts(recent_context)
 
@@ -446,7 +899,7 @@ def main(argv):
         return 1
 
     r = Report()
-    check_schema(payload, r)
+    check_schema(kind, payload, r)
     VALIDATORS[kind](payload, r)
 
     if args.recent_context:
@@ -467,10 +920,10 @@ def main(argv):
         print(f"ERROR: {e}")
 
     if r.errors:
-        print(f"\n{len(r.errors)} error(s) — the app would discard this {kind}. Fix and re-validate.")
+        print(f"\n{len(r.errors)} error(s) — this {kind} violates legacy body rules. Fix and re-validate.")
         return 1
     suffix = f" ({len(r.warns)} warning(s))." if r.warns else "."
-    print(f"OK: {kind} passes the app's import rules{suffix}")
+    print(f"OK: {kind} passes legacy payload-body checks{suffix} Phone application is unconfirmed.")
     return 0
 
 

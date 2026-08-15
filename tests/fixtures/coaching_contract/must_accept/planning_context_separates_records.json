@@ -1,0 +1,126 @@
+{
+  "schema": "t4l.coaching-contract.v1",
+  "contractVersion": "1.0.0",
+  "messageType": "planning_context",
+  "producer": "server",
+  "generatedAt": "2026-08-01T08:01:00Z",
+  "acceptedState": {
+    "schema": "t4l.coaching-contract.v1",
+    "contractVersion": "1.0.0",
+    "messageType": "accepted_state",
+    "producer": "phone",
+    "contextRevision": "ctx_41_aaaaaaaa",
+    "generatedAt": "2026-08-01T08:00:00Z",
+    "sources": [
+      {
+        "sourceId": "src_daystate1",
+        "kind": "phone_state",
+        "path": "/acceptedState",
+        "fields": [
+          "/state/activeBlock",
+          "/state/nextWorkout",
+          "/state/goals",
+          "/state/constraints",
+          "/state/standingConsents"
+        ],
+        "sourceRevision": "ctx_41_aaaaaaaa",
+        "artifactId": "art_phone_state:latest",
+        "sourceTime": "2026-08-01T07:55:00Z",
+        "receivedAt": "2026-08-01T07:55:02Z",
+        "availability": "available",
+        "freshness": {
+          "evaluatedAt": "2026-08-01T07:59:00Z",
+          "maxAgeSeconds": 600,
+          "status": "fresh"
+        }
+      }
+    ],
+    "target": {
+      "localDate": "2026-08-01",
+      "timeZone": "Europe/Berlin",
+      "sessionId": null
+    },
+    "activeSessionId": null,
+    "activeSession": null,
+    "state": {
+      "activeBlock": { "id": "phone_block_7" },
+      "nextWorkout": { "id": "phone_workout_12" },
+      "goals": { "longTerm": "Stay strong and athletic" },
+      "constraints": [],
+      "standingConsents": []
+    }
+  },
+  "proposals": [],
+  "appliedReceipts": [],
+  "currentRequests": [
+    {
+      "requestId": "req_eeeeeeeeeeeeeeee",
+      "kind": "daily_coaching",
+      "status": "pending",
+      "target": {
+        "localDate": "2026-08-01",
+        "timeZone": "Europe/Berlin",
+        "sessionId": null
+      },
+      "createdAt": "2026-08-01T07:59:00Z",
+      "sourceTime": "2026-08-01T07:58:00Z",
+      "expiresAt": "2026-08-01T12:00:00Z",
+      "sources": [
+        {
+          "sourceId": "src_request01",
+          "kind": "athlete_request",
+          "path": "/currentRequests/0",
+          "fields": ["/requestId", "/kind", "/target", "/payload"],
+          "sourceRevision": "srcv_request1",
+          "artifactId": "art_training_request:latest",
+          "sourceTime": "2026-08-01T07:58:00Z",
+          "receivedAt": "2026-08-01T07:58:01Z",
+          "availability": "available",
+          "freshness": {
+            "evaluatedAt": "2026-08-01T08:00:00Z",
+            "maxAgeSeconds": 600,
+            "status": "fresh"
+          }
+        }
+      ],
+      "payload": { "question": "Plan today from current readiness." }
+    }
+  ],
+  "requestHistory": [
+    {
+      "requestId": "req_ffffffffffffffff",
+      "kind": "guidance",
+      "status": "expired",
+      "target": {
+        "localDate": "2026-07-31",
+        "timeZone": "Europe/Berlin",
+        "sessionId": null
+      },
+      "createdAt": "2026-07-31T06:01:00Z",
+      "sourceTime": "2026-07-31T06:00:00Z",
+      "expiresAt": "2026-07-31T08:00:00Z",
+      "closedAt": "2026-07-31T08:00:01Z",
+      "receiptId": null,
+      "reasonCode": "request_expired",
+      "sources": [
+        {
+          "sourceId": "src_history01",
+          "kind": "athlete_request",
+          "path": "/requestHistory/0",
+          "fields": ["/requestId", "/status", "/payload"],
+          "sourceRevision": "srcv_history1",
+          "artifactId": "art_training_request:expired",
+          "sourceTime": "2026-07-31T06:00:00Z",
+          "receivedAt": "2026-07-31T06:00:01Z",
+          "availability": "available",
+          "freshness": {
+            "evaluatedAt": "2026-07-31T08:00:01Z",
+            "maxAgeSeconds": 86400,
+            "status": "fresh"
+          }
+        }
+      ],
+      "payload": { "question": "Give me a short recovery tip." }
+    }
+  ]
+}

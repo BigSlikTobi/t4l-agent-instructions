@@ -1,0 +1,1027 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:t4l:coaching-contract:1.0.0",
+  "title": "T4L Coaching Contract v1",
+  "description": "The single normative coaching-state contract. Phone-authored accepted_state is authoritative. Agent-authored writes are proposals only. Only the phone may emit applied_receipt. A successful MCP write proves storage, never acceptance or application.",
+  "$comment": "Retry rule: the same resultId may be retried only when the RFC 8785 canonical bytes of the full proposal envelope are identical. Any semantic envelope change, including target, base revision, expiry, review, input sources, or payload, MUST use a new resultId. payloadDigest separately binds RFC 8785(payload). Reusing one resultId with any changed envelope field is an idempotency conflict and MUST be rejected.",
+  "oneOf": [
+    { "$ref": "#/$defs/acceptedState" },
+    { "$ref": "#/$defs/proposal" },
+    { "$ref": "#/$defs/appliedReceipt" },
+    { "$ref": "#/$defs/planningContext" }
+  ],
+  "x-t4l-invariants": [
+    {
+      "id": "accepted-freshness-v1",
+      "messageType": "accepted_state",
+      "description": "Every available source has sourceTime <= receivedAt <= freshness.evaluatedAt <= generatedAt. Each source freshness status agrees with evaluatedAt - sourceTime. Missing/unknown sources carry null source identity/time and unknown freshness."
+    },
+    {
+      "id": "accepted-session-identity-v1",
+      "messageType": "accepted_state",
+      "description": "activeSessionId and activeSession are either both null or both present, and their session IDs match."
+    },
+    {
+      "id": "accepted-provenance-coverage-v1",
+      "messageType": "accepted_state",
+      "description": "Every top-level field in state is covered by its RFC 6901 JSON Pointer (/state/<escaped-field>) in at least one source.fields entry. A non-null state value requires at least one available source; a null value may instead be covered by an explicit missing or unknown source."
+    },
+    {
+      "id": "accepted-consent-state-v1",
+      "messageType": "accepted_state",
+      "description": "Standing-consent status and timestamps agree at accepted-state generation: grantedAt <= validFrom; active is in-window and unrevoked; expired has passed validUntil; revoked has a past revokedAt."
+    },
+    {
+      "id": "proposal-time-and-freshness-v1",
+      "messageType": "proposal",
+      "description": "baseFreshness.sourceTime <= baseFreshness.evaluatedAt <= generatedAt < expiresAt, and the base context is within maxAgeSeconds."
+    },
+    {
+      "id": "proposal-input-sources-v1",
+      "messageType": "proposal",
+      "description": "Every input source is available and fresh and lists the non-empty RFC 6901 field pointers relied on. Pointers are relative to the source record named by path, so accepted state, current requests, logs, and chat may all be explicit dependencies. baseFreshness uses the earliest sourceTime, latest evaluatedAt, and smallest maxAgeSeconds across required inputs."
+    },
+    {
+      "id": "proposal-result-idempotency-v1",
+      "messageType": "proposal",
+      "scope": "corpus",
+      "description": "One resultId identifies exactly one RFC 8785 canonical full proposal envelope. Identical retries are allowed; any changed field with the same resultId is a conflict."
+    },
+    {
+      "id": "receipt-time-order-v1",
+      "messageType": "applied_receipt",
+      "description": "For applied outcomes: evaluatedAt <= appliedAt <= sourceTime <= generatedAt, and the appliedRevision counter is strictly greater than the baseRevision counter. Otherwise: evaluatedAt <= sourceTime <= generatedAt and appliedAt is null. Every applied receipt embeds the complete proposal envelope; explicit review must occur and application must be evaluated before proposal expiry."
+    },
+    {
+      "id": "automatic-receipt-proof-v1",
+      "messageType": "applied_receipt",
+      "when": { "outcome": "applied", "applyMode": "automatic" },
+      "description": "The receipt and proposal snapshot have the same requestId, resultId, digest, change class, apply mode, target local date/timezone/session, and base revision. The accepted-state snapshot has that base revision and target. Evaluation happens after its sourceTime and before proposal expiry. The named standing consent is active, in its validity window, covers the change class, and is not revoked. acceptedStateAtEvaluation.activeSessionId is null, proving no active-session conflict."
+    },
+    {
+      "id": "current-request-time-v1",
+      "messageType": "planning_context",
+      "description": "Every current request is pending or in_review, has sourceTime <= createdAt <= planning-context generatedAt, and has not expired at that instant."
+    },
+    {
+      "id": "request-history-time-v1",
+      "messageType": "planning_context",
+      "description": "Request history preserves consumed, rejected, and expired terminal states. sourceTime <= createdAt <= closedAt <= planning-context generatedAt; expired entries close at or after expiry; consumed/rejected entries link a matching applied/non-applied receipt; request IDs cannot be both current and historical."
+    },
+    {
+      "id": "planning-context-integrity-v1",
+      "messageType": "planning_context",
+      "description": "Nested records do not postdate the bundle. The proposals array contains current/open proposals only: each baseRevision matches acceptedState, requestId resolves to exactly one current request with the same target, and every input source pointer resolves and matches a complete authoritative source snapshot. Receipt-embedded proposals are terminal history and cannot also appear as current proposals. Result IDs bind identical full proposal envelopes across both sets. Receipt IDs are unique, every receipt links a terminal request-history record, and acceptedState's monotonic revision is at or after every appliedRevision."
+    }
+  ],
+  "$defs": {
+    "schemaName": {
+      "type": "string",
+      "const": "t4l.coaching-contract.v1"
+    },
+    "contractVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^req_[a-z0-9]{16,64}$",
+      "description": "Stable request identity. It cannot be substituted by a result or receipt ID."
+    },
+    "resultId": {
+      "type": "string",
+      "pattern": "^res_[a-z0-9]{16,64}$",
+      "description": "Stable proposal/result identity. Retries of identical bytes retain this ID."
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^rcpt_[a-z0-9]{16,64}$",
+      "description": "Unique phone-authored application-evaluation receipt identity."
+    },
+    "consentId": {
+      "type": "string",
+      "pattern": "^cns_[a-z0-9]{16,64}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^ses_[a-z0-9]{16,64}$"
+    },
+    "nullableSessionId": {
+      "oneOf": [
+        { "$ref": "#/$defs/sessionId" },
+        { "type": "null" }
+      ]
+    },
+    "contextRevision": {
+      "type": "string",
+      "pattern": "^ctx_[0-9]{1,20}_[a-f0-9]{8,64}$",
+      "description": "Revision of phone-authored accepted state. The numeric component is a phone-monotonic revision counter. Proposals reference it as baseRevision; receipts name the resulting state as appliedRevision. Equal counters must carry the same full revision token."
+    },
+    "payloadDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 over the UTF-8 bytes of the RFC 8785 JSON Canonicalization Scheme serialization of payload. Same resultId plus a different digest is a conflict."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nullableTimestamp": {
+      "oneOf": [
+        { "$ref": "#/$defs/timestamp" },
+        { "type": "null" }
+      ]
+    },
+    "localDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "ianaTimeZone": {
+      "type": "string",
+      "format": "iana-time-zone",
+      "pattern": "^(?:UTC|[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)+)$",
+      "description": "An IANA TZDB identifier such as Europe/Berlin. A numeric UTC offset is not enough."
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["localDate", "timeZone", "sessionId"],
+      "properties": {
+        "localDate": { "$ref": "#/$defs/localDate" },
+        "timeZone": { "$ref": "#/$defs/ianaTimeZone" },
+        "sessionId": { "$ref": "#/$defs/nullableSessionId" }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluatedAt", "maxAgeSeconds", "status"],
+      "properties": {
+        "evaluatedAt": { "$ref": "#/$defs/timestamp" },
+        "maxAgeSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["fresh", "stale"]
+        }
+      }
+    },
+    "baseFreshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceTime", "evaluatedAt", "maxAgeSeconds", "status"],
+      "properties": {
+        "sourceTime": { "$ref": "#/$defs/timestamp" },
+        "evaluatedAt": { "$ref": "#/$defs/timestamp" },
+        "maxAgeSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "status": {
+          "type": "string",
+          "const": "fresh"
+        }
+      }
+    },
+    "activeSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "startedAt"],
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "startedAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "sourceId": {
+      "type": "string",
+      "pattern": "^src_[a-z0-9]{8,64}$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^(?:ctx_[0-9]{1,20}_[a-f0-9]{8,64}|srcv_[a-z0-9]{8,64})$"
+    },
+    "artifactId": {
+      "type": "string",
+      "pattern": "^art_[a-z0-9][a-z0-9:._-]{7,127}$"
+    },
+    "sourceFreshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluatedAt", "maxAgeSeconds", "status"],
+      "properties": {
+        "evaluatedAt": { "$ref": "#/$defs/timestamp" },
+        "maxAgeSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["fresh", "stale", "unknown"]
+        }
+      }
+    },
+    "sourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "kind",
+        "path",
+        "fields",
+        "sourceRevision",
+        "artifactId",
+        "sourceTime",
+        "receivedAt",
+        "availability",
+        "freshness"
+      ],
+      "properties": {
+        "sourceId": {
+          "oneOf": [
+            { "$ref": "#/$defs/sourceId" },
+            { "type": "null" }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "phone_state",
+            "training_log",
+            "nutrition_log",
+            "health_activity",
+            "athlete_profile",
+            "athlete_request",
+            "athlete_chat",
+            "other"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)+$",
+          "description": "RFC 6901 location of the owning logical record inside planning context, such as /acceptedState or /currentRequests/0. It is not a tool name."
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^(?:/(?:[^~/]|~[01])*)+$",
+            "description": "RFC 6901 JSON Pointer evaluated relative to the record named by path. Example: path /acceptedState with field /state/activeBlock, or path /currentRequests/0 with field /payload."
+          }
+        },
+        "sourceRevision": {
+          "oneOf": [
+            { "$ref": "#/$defs/sourceRevision" },
+            { "type": "null" }
+          ]
+        },
+        "artifactId": {
+          "oneOf": [
+            { "$ref": "#/$defs/artifactId" },
+            { "type": "null" }
+          ]
+        },
+        "sourceTime": { "$ref": "#/$defs/nullableTimestamp" },
+        "receivedAt": { "$ref": "#/$defs/timestamp" },
+        "availability": {
+          "type": "string",
+          "enum": ["available", "missing", "unknown"]
+        },
+        "freshness": { "$ref": "#/$defs/sourceFreshness" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "availability": { "const": "available" } },
+            "required": ["availability"]
+          },
+          "then": {
+            "properties": {
+              "sourceId": { "$ref": "#/$defs/sourceId" },
+              "sourceRevision": { "$ref": "#/$defs/sourceRevision" },
+              "sourceTime": { "$ref": "#/$defs/timestamp" },
+              "freshness": {
+                "properties": {
+                  "status": { "enum": ["fresh", "stale"] }
+                }
+              }
+            },
+            "$comment": "Available provenance always carries an immutable sourceRevision. artifactId is optional lookup metadata and never substitutes for a revision."
+          },
+          "else": {
+            "properties": {
+              "sourceId": { "type": "null" },
+              "sourceRevision": { "type": "null" },
+              "artifactId": { "type": "null" },
+              "sourceTime": { "type": "null" },
+              "freshness": {
+                "properties": { "status": { "const": "unknown" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "standingConsent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consentId",
+        "scopes",
+        "status",
+        "grantedAt",
+        "validFrom",
+        "validUntil",
+        "revokedAt"
+      ],
+      "properties": {
+        "consentId": { "$ref": "#/$defs/consentId" },
+        "scopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["minor_daily", "guidance"]
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "expired", "revoked"]
+        },
+        "grantedAt": { "$ref": "#/$defs/timestamp" },
+        "validFrom": { "$ref": "#/$defs/timestamp" },
+        "validUntil": { "$ref": "#/$defs/nullableTimestamp" },
+        "revokedAt": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "acceptedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "contractVersion",
+        "messageType",
+        "producer",
+        "contextRevision",
+        "generatedAt",
+        "sources",
+        "target",
+        "activeSessionId",
+        "activeSession",
+        "state"
+      ],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaName" },
+        "contractVersion": { "$ref": "#/$defs/contractVersion" },
+        "messageType": { "type": "string", "const": "accepted_state" },
+        "producer": {
+          "type": "string",
+          "const": "phone",
+          "description": "Only the phone may author accepted state."
+        },
+        "contextRevision": { "$ref": "#/$defs/contextRevision" },
+        "generatedAt": { "$ref": "#/$defs/timestamp" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceRecord" },
+          "description": "Field-level provenance for every planning source, including explicit missing/unknown entries."
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "activeSessionId": { "$ref": "#/$defs/nullableSessionId" },
+        "activeSession": {
+          "oneOf": [
+            { "$ref": "#/$defs/activeSession" },
+            { "type": "null" }
+          ]
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "activeBlock",
+            "nextWorkout",
+            "goals",
+            "constraints",
+            "standingConsents"
+          ],
+          "properties": {
+            "activeBlock": {
+              "oneOf": [{ "type": "object" }, { "type": "null" }]
+            },
+            "nextWorkout": {
+              "oneOf": [{ "type": "object" }, { "type": "null" }]
+            },
+            "goals": {
+              "oneOf": [{ "type": "object" }, { "type": "null" }]
+            },
+            "constraints": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "standingConsents": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/standingConsent" }
+            }
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "required", "standingConsentId"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["explicit_review", "standing_consent"]
+        },
+        "required": { "type": "boolean" },
+        "standingConsentId": {
+          "oneOf": [
+            { "$ref": "#/$defs/consentId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "contractVersion",
+        "messageType",
+        "producer",
+        "requestId",
+        "resultId",
+        "payloadDigest",
+        "generatedAt",
+        "expiresAt",
+        "baseRevision",
+        "baseFreshness",
+        "inputSources",
+        "target",
+        "changeClass",
+        "applyMode",
+        "review",
+        "payload"
+      ],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaName" },
+        "contractVersion": { "$ref": "#/$defs/contractVersion" },
+        "messageType": { "type": "string", "const": "proposal" },
+        "producer": {
+          "type": "string",
+          "const": "agent",
+          "description": "Agents may author proposals only. They never author accepted_state or applied_receipt."
+        },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "resultId": { "$ref": "#/$defs/resultId" },
+        "payloadDigest": { "$ref": "#/$defs/payloadDigest" },
+        "generatedAt": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": {
+          "$ref": "#/$defs/timestamp",
+          "description": "The phone must not apply this proposal at or after this instant."
+        },
+        "baseRevision": { "$ref": "#/$defs/contextRevision" },
+        "baseFreshness": { "$ref": "#/$defs/baseFreshness" },
+        "inputSources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/sourceRecord" },
+              {
+                "properties": {
+                  "availability": { "const": "available" },
+                  "freshness": {
+                    "properties": { "status": { "const": "fresh" } }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "changeClass": {
+          "type": "string",
+          "enum": ["full_block", "material_daily", "minor_daily", "guidance"]
+        },
+        "applyMode": {
+          "type": "string",
+          "enum": ["explicit_review", "automatic"]
+        },
+        "review": { "$ref": "#/$defs/review" },
+        "payload": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "The proposed coaching payload. This is not accepted phone state."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "changeClass": { "enum": ["full_block", "material_daily"] }
+            },
+            "required": ["changeClass"]
+          },
+          "then": {
+            "properties": {
+              "applyMode": { "const": "explicit_review" },
+              "review": {
+                "properties": {
+                  "mode": { "const": "explicit_review" },
+                  "required": { "const": true },
+                  "standingConsentId": { "type": "null" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "applyMode": { "const": "automatic" } },
+            "required": ["applyMode"]
+          },
+          "then": {
+            "properties": {
+              "changeClass": { "enum": ["minor_daily", "guidance"] },
+              "review": {
+                "properties": {
+                  "mode": { "const": "standing_consent" },
+                  "required": { "const": false },
+                  "standingConsentId": { "$ref": "#/$defs/consentId" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "applyMode": { "const": "explicit_review" } },
+            "required": ["applyMode"]
+          },
+          "then": {
+            "properties": {
+              "review": {
+                "properties": {
+                  "mode": { "const": "explicit_review" },
+                  "required": { "const": true },
+                  "standingConsentId": { "type": "null" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "explicitReviewProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposal", "reviewedBy", "reviewedAt", "decision"],
+      "properties": {
+        "proposal": {
+          "$ref": "#/$defs/proposal",
+          "description": "The complete immutable proposal envelope reviewed and approved by the athlete."
+        },
+        "reviewedBy": { "type": "string", "const": "athlete" },
+        "reviewedAt": { "$ref": "#/$defs/timestamp" },
+        "decision": { "type": "string", "const": "approved" }
+      }
+    },
+    "automaticApplyProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal",
+        "acceptedStateAtEvaluation",
+        "standingConsent",
+        "checks"
+      ],
+      "properties": {
+        "proposal": {
+          "$ref": "#/$defs/proposal",
+          "description": "The complete immutable proposal envelope evaluated by the phone."
+        },
+        "acceptedStateAtEvaluation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contextRevision",
+            "sourceTime",
+            "target",
+            "activeSessionId"
+          ],
+          "properties": {
+            "contextRevision": { "$ref": "#/$defs/contextRevision" },
+            "sourceTime": { "$ref": "#/$defs/timestamp" },
+            "target": { "$ref": "#/$defs/target" },
+            "activeSessionId": {
+              "type": "null",
+              "description": "Automatic application is forbidden while any workout session is active."
+            }
+          }
+        },
+        "standingConsent": {
+          "$ref": "#/$defs/standingConsent",
+          "description": "The complete consent record evaluated by the phone; semantic checks require it to be active, unrevoked, in-window, and scoped to the proposal."
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "targetMatched",
+            "baseRevisionMatched",
+            "proposalUnexpired",
+            "standingConsentValid",
+            "noActiveSessionConflict"
+          ],
+          "properties": {
+            "targetMatched": { "const": true },
+            "baseRevisionMatched": { "const": true },
+            "proposalUnexpired": { "const": true },
+            "standingConsentValid": { "const": true },
+            "noActiveSessionConflict": { "const": true }
+          }
+        }
+      }
+    },
+    "appliedReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "contractVersion",
+        "messageType",
+        "producer",
+        "receiptId",
+        "requestId",
+        "resultId",
+        "payloadDigest",
+        "changeClass",
+        "applyMode",
+        "outcome",
+        "baseRevision",
+        "appliedRevision",
+        "target",
+        "evaluatedAt",
+        "appliedAt",
+        "sourceTime",
+        "generatedAt",
+        "reasonCode",
+        "explicitReviewProof",
+        "automaticApplyProof"
+      ],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaName" },
+        "contractVersion": { "$ref": "#/$defs/contractVersion" },
+        "messageType": { "type": "string", "const": "applied_receipt" },
+        "producer": {
+          "type": "string",
+          "const": "phone",
+          "description": "Only the phone that owns accepted state may author an application receipt."
+        },
+        "receiptId": { "$ref": "#/$defs/receiptId" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "resultId": { "$ref": "#/$defs/resultId" },
+        "payloadDigest": { "$ref": "#/$defs/payloadDigest" },
+        "changeClass": {
+          "type": "string",
+          "enum": ["full_block", "material_daily", "minor_daily", "guidance"]
+        },
+        "applyMode": {
+          "type": "string",
+          "enum": ["explicit_review", "automatic"]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["applied", "rejected", "dismissed", "superseded"]
+        },
+        "baseRevision": { "$ref": "#/$defs/contextRevision" },
+        "appliedRevision": {
+          "oneOf": [
+            { "$ref": "#/$defs/contextRevision" },
+            { "type": "null" }
+          ]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "evaluatedAt": { "$ref": "#/$defs/timestamp" },
+        "appliedAt": { "$ref": "#/$defs/nullableTimestamp" },
+        "sourceTime": { "$ref": "#/$defs/timestamp" },
+        "generatedAt": { "$ref": "#/$defs/timestamp" },
+        "reasonCode": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            { "type": "null" }
+          ]
+        },
+        "explicitReviewProof": {
+          "oneOf": [
+            { "$ref": "#/$defs/explicitReviewProof" },
+            { "type": "null" }
+          ]
+        },
+        "automaticApplyProof": {
+          "oneOf": [
+            { "$ref": "#/$defs/automaticApplyProof" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "applied" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "appliedRevision": { "$ref": "#/$defs/contextRevision" },
+              "appliedAt": { "$ref": "#/$defs/timestamp" },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "appliedRevision": { "type": "null" },
+              "appliedAt": { "type": "null" },
+              "reasonCode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{2,63}$"
+              },
+              "explicitReviewProof": { "type": "null" },
+              "automaticApplyProof": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "changeClass": { "enum": ["full_block", "material_daily"] }
+            },
+            "required": ["changeClass"]
+          },
+          "then": {
+            "properties": { "applyMode": { "const": "explicit_review" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "applyMode": { "const": "automatic" } },
+            "required": ["applyMode"]
+          },
+          "then": {
+            "properties": {
+              "changeClass": { "enum": ["minor_daily", "guidance"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": { "outcome": { "const": "applied" } },
+                "required": ["outcome"]
+              },
+              {
+                "properties": { "applyMode": { "const": "automatic" } },
+                "required": ["applyMode"]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "explicitReviewProof": { "type": "null" },
+              "automaticApplyProof": { "$ref": "#/$defs/automaticApplyProof" }
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "properties": { "outcome": { "const": "applied" } },
+                "required": ["outcome"]
+              },
+              {
+                "properties": { "applyMode": { "const": "explicit_review" } },
+                "required": ["applyMode"]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "explicitReviewProof": { "$ref": "#/$defs/explicitReviewProof" },
+              "automaticApplyProof": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "currentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "kind",
+        "status",
+        "target",
+        "createdAt",
+        "sourceTime",
+        "expiresAt",
+        "sources",
+        "payload"
+      ],
+      "properties": {
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "training_block",
+            "daily_coaching",
+            "nutrition_analysis",
+            "guidance"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_review"]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "sourceTime": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": { "$ref": "#/$defs/nullableTimestamp" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceRecord" }
+        },
+        "payload": {
+          "type": "object",
+          "minProperties": 1
+        }
+      }
+    },
+    "requestHistoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "kind",
+        "status",
+        "target",
+        "createdAt",
+        "sourceTime",
+        "expiresAt",
+        "closedAt",
+        "receiptId",
+        "reasonCode",
+        "sources",
+        "payload"
+      ],
+      "properties": {
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "training_block",
+            "daily_coaching",
+            "nutrition_analysis",
+            "guidance"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["consumed", "rejected", "expired"]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "sourceTime": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": { "$ref": "#/$defs/nullableTimestamp" },
+        "closedAt": { "$ref": "#/$defs/timestamp" },
+        "receiptId": {
+          "oneOf": [
+            { "$ref": "#/$defs/receiptId" },
+            { "type": "null" }
+          ]
+        },
+        "reasonCode": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$" },
+            { "type": "null" }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceRecord" }
+        },
+        "payload": {
+          "type": "object",
+          "minProperties": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "consumed" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "receiptId": { "$ref": "#/$defs/receiptId" },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "status": { "const": "rejected" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "receiptId": { "$ref": "#/$defs/receiptId" },
+              "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "status": { "const": "expired" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "expiresAt": { "$ref": "#/$defs/timestamp" },
+              "receiptId": { "type": "null" },
+              "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$" }
+            }
+          }
+        }
+      ]
+    },
+    "planningContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "contractVersion",
+        "messageType",
+        "producer",
+        "generatedAt",
+        "acceptedState",
+        "proposals",
+        "appliedReceipts",
+        "currentRequests",
+        "requestHistory"
+      ],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaName" },
+        "contractVersion": { "$ref": "#/$defs/contractVersion" },
+        "messageType": { "type": "string", "const": "planning_context" },
+        "producer": {
+          "type": "string",
+          "const": "server",
+          "description": "A transport bundle assembled without changing the authority of its records."
+        },
+        "generatedAt": { "$ref": "#/$defs/timestamp" },
+        "acceptedState": { "$ref": "#/$defs/acceptedState" },
+        "proposals": {
+          "type": "array",
+          "description": "Current/open proposals only. Applied proposal history lives in the full proposal envelope embedded by its phone receipt; rejected/expired request status remains in requestHistory.",
+          "items": { "$ref": "#/$defs/proposal" }
+        },
+        "appliedReceipts": {
+          "type": "array",
+          "description": "Phone-authored terminal evaluation records. Applied receipts embed the complete immutable proposal envelope.",
+          "items": { "$ref": "#/$defs/appliedReceipt" }
+        },
+        "currentRequests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/currentRequest" }
+        },
+        "requestHistory": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requestHistoryItem" }
+        }
+      }
+    }
+  }
+}

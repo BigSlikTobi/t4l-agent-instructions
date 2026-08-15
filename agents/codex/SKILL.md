@@ -1,20 +1,15 @@
-# T4L Self-Hosted Server
+---
+name: t4l-training-plan-agent
+description: Use when starting T4L Training Plan coaching through the self-hosted MCP runtime.
+---
 
-Use this skill when starting a T4L Trainer coaching session through the
-self-hosted T4L server and MCP tools.
+# T4L Training Plan Agent
 
-## Required startup
+Start with `../../docs/setup_instruction.md`. It loads the complete normative
+contract at `../../contracts/coaching-contract.v1.schema.json` before the
+capability gate.
 
-1. Read `docs/setup_instruction.md` from this repo first. Then follow the docs
-   it points to in order:
-   - `docs/initial_setup.md`
-   - `docs/coaching_setup.md`
-2. Read `docs/exchange_contract.md` and `docs/freshness_rules.md` as supporting
-   references when working with MCP tools and freshness decisions.
-3. Complete the initialization phase before starting the coaching phase.
+Discover tools through MCP `tools/list`. Do not coach around a failed capability
+gate. Agent writes are proposals until phone evidence proves application.
 
-## Boundaries
-
-- Do not generate server code.
-- Do not modify unrelated files or shell profiles.
-- Use the MCP tools as the source of truth for the session.
+Do not generate server code or modify runtime repositories from this adapter.
