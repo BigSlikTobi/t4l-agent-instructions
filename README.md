@@ -1,30 +1,33 @@
 # T4L Agent Instructions
 
-Shared startup and coaching instructions for T4L Trainer agents. This repo is
-the canonical agent bootstrap source.
+This repository connects an existing OpenClaw coach to the T4L iPhone app.
 
-These docs are agent adapters only; the self-hosted server implementation lives
-in the installed `t4l-server` package and is started with `t4l-server`.
+## The only message the user sends
 
-## Startup rule
+Send this to the OpenClaw agent you already use:
 
-Read `docs/setup_instruction.md` first. It routes agents through the one-time
-initial setup docs and then the coaching setup docs.
+> Read https://github.com/BigSlikTobi/t4l-agent-instructions and follow
+> `INSTALL.md` from start to finish. Connect the existing OpenClaw agent I am
+> talking to with T4L. Do the host work yourself. Preserve my current agent,
+> model, provider, credentials, channels, dashboard, and other services. Ask me
+> only if the runbook says a person must decide or act.
 
-Do not coach from memory alone. Start or verify the self-hosted T4L server,
-connect through MCP, wait for fresh app context, inspect the available tools and
-context, then begin the training workflow.
+That is all. Do not paste commands, package names, tokens, or configuration into
+the chat or the phone.
 
-## Docs
+The agent should need you only if:
 
-- `docs/setup_instruction.md`: first-read sitemap for agents.
-- `docs/initial_setup.md`: server, app, and MCP initialization.
-- `docs/coaching_setup.md`: goal discovery, coaching rules, nutrition guidance,
-  and MCP result writes.
-- `docs/exchange_contract.md`: REST and MCP exchange contract.
-- `docs/freshness_rules.md`: freshness and missing-data rules.
+- it cannot safely choose your public hostname;
+- the host needs a real administrator approval;
+- the iPhone shows the final `/t4l connect XXXX-XXXX` pairing command.
 
-## References
+No second account, second OpenClaw agent, API-key form, or Tailscale network is
+needed for a normal public VPS.
 
-- Server package: `t4l-server`
-- This instruction repo: `https://github.com/BigSlikTobi/t4l-agent-instructions`
+## For the installing agent
+
+Read and execute [INSTALL.md](INSTALL.md). Do not turn it into terminal homework
+for the user.
+
+The coach instructions are packaged inside `t4l-agent`. Do not restore or load
+the old duplicate instruction bundle from this repository's history.
