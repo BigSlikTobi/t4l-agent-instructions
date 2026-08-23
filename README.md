@@ -1,61 +1,33 @@
 # T4L Agent Instructions
 
-This repo is the instruction layer for the T4L Training Plan agent. It does not
-implement the phone app, server, MCP runtime, or a background runner.
+This repository connects an existing OpenClaw coach to the T4L iPhone app.
 
-## Source precedence
+## The only message the user sends
 
-Start a session with `docs/setup_instruction.md`. When sources disagree, use
-this precedence:
+Send this to the OpenClaw agent you already use:
 
-1. `contracts/coaching-contract.v1.schema.json` — the only normative coaching
-   contract. It defines phone-accepted state, agent proposals, applied receipts,
-   revisions, freshness, consent, review, and retry identity.
-2. `docs/setup_instruction.md` and `docs/coaching_setup.md` — startup and
-   coaching procedures.
-3. `skills/t4l-write-results/reference/payload-shapes.md` — current legacy MCP
-   payload bodies. These shapes do not prove that a proposal was applied.
+> Read https://github.com/BigSlikTobi/t4l-agent-instructions and follow
+> `INSTALL.md` from start to finish. Connect the existing OpenClaw agent I am
+> talking to with T4L. Do the host work yourself. Preserve my current agent,
+> model, provider, credentials, channels, dashboard, and other services. Ask me
+> only if the runbook says a person must decide or act.
 
-The files under `skills/` and `agents/` are adapters. They must point back to
-the contract. They must not redefine it. `docs/journal.md` is history only and
-is never an instruction source.
+That is all. Do not paste commands, package names, tokens, or configuration into
+the chat or the phone.
 
-## Runtime neutrality
+The agent should need you only if:
 
-Use whatever agent runtime and model the customer configured. This repo has no
-provider or model default and makes no direct provider API call. It never asks
-for provider credentials. Optional provider/model/reasoning descriptor fields
-may be repeated in the coach introduction when known; they are display metadata
-only and never a trust or capability gate.
+- it cannot safely choose your public hostname;
+- the host needs a real administrator approval;
+- the iPhone shows the final `/t4l connect XXXX-XXXX` pairing command.
 
-## Core boundary
+No second account, second OpenClaw agent, API-key form, or Tailscale network is
+needed for a normal public VPS.
 
-Personalized coaching starts from a fresh, provenance-rich
-`get_planning_context` response. A server timestamp alone is not provenance.
-An agent result is a proposal. It becomes accepted phone state only after the
-phone emits a matching applied receipt. A later revision or similar-looking
-state is not proof of which proposal was applied.
+## For the installing agent
 
-Do not fall back to guessed snapshot, memory, HealthKit, or live-workout tools.
-Use only tools returned by MCP `tools/list`. If the required planning contract
-is missing, say so and stop the state-changing workflow.
+Read and execute [INSTALL.md](INSTALL.md). Do not turn it into terminal homework
+for the user.
 
-## Verification
-
-Run:
-
-```bash
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-## Related runtime
-
-The server is distributed separately as `t4l-server`. Contract support must be
-verified through MCP capability discovery, not from command existence or an
-assumed package version.
-
-OpenClaw installation starts with one owner-approved, version-pinned
-`t4l-connect` bootstrap package. After that approval, deterministic host code
-verifies a signed release manifest, installs the isolated connector, configures
-MCP, and rolls back failed changes. The model never installs from repository
-branches and never receives host, runtime, MCP, or provider credentials.
+The coach instructions are packaged inside `t4l-agent`. Do not restore or load
+the old duplicate instruction bundle from this repository's history.
