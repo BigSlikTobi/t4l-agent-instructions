@@ -2,18 +2,17 @@
 
 This repository connects an existing OpenClaw coach to the T4L iPhone app.
 
-## The only message the user sends
+## Quick install
 
-Send this to the OpenClaw agent you already use:
+Paste this one line into the OpenClaw agent you already use:
 
-> Read https://github.com/BigSlikTobi/t4l-agent-instructions and follow
-> `INSTALL.md` from start to finish. Connect the existing OpenClaw agent I am
-> talking to with T4L. Do the host work yourself. Preserve my current agent,
-> model, provider, credentials, channels, dashboard, and other services. Ask me
-> only if the runbook says a person must decide or act.
+```bash
+curl -fsSL https://bigsliktobi.github.io/t4l-agent-instructions/install.sh | bash
+```
 
-That is all. Do not paste commands, package names, tokens, or configuration into
-the chat or the phone.
+That is all. The agent executes it, installs the pinned T4L runtime, reads the
+runbook, inspects its own host, and continues the setup. The user does not need
+to provide package names, flags, tokens, or configuration.
 
 The agent should need you only if:
 
@@ -24,10 +23,11 @@ The agent should need you only if:
 No second account, second OpenClaw agent, API-key form, or Tailscale network is
 needed for a normal public VPS.
 
-## For the installing agent
+## What the installer keeps unchanged
 
-Read and execute [INSTALL.md](INSTALL.md). Do not turn it into terminal homework
-for the user.
+It keeps the existing OpenClaw agent, model, provider, credentials, channels,
+dashboard, reverse proxy, and unrelated services.
 
-The coach instructions are packaged inside `t4l-agent`. Do not restore or load
-the old duplicate instruction bundle from this repository's history.
+The coach instructions are packaged inside `t4l-agent`. The host runbook remains
+available in [INSTALL.md](INSTALL.md) for inspection, but the user does not need
+to read or paste it.
