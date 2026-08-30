@@ -3,10 +3,10 @@ set -Eeuo pipefail
 
 umask 077
 
-readonly T4L_CORE_INSTALLER_URL="https://raw.githubusercontent.com/BigSlikTobi/t4l-agent/v0.3.2/install.sh"
-readonly T4L_CORE_INSTALLER_SHA256="addbecaba87b3699f9392c96f0362005e97a73d6f924783d2bd422ac4f294e07"
+readonly T4L_CORE_INSTALLER_URL="https://raw.githubusercontent.com/BigSlikTobi/t4l-agent/v0.4.0/install.sh"
+readonly T4L_CORE_INSTALLER_SHA256="0673068b70783ae73f0d6b6478f19e0d088016e092dc0f076675d99660c64684"
 readonly T4L_RUNBOOK_URL="https://raw.githubusercontent.com/BigSlikTobi/t4l-agent-instructions/main/INSTALL.md"
-readonly T4L_RUNBOOK_SHA256="21d1da7fc434ccd62ce980f33dd1175d42cf7ab57657f7a87c3d17618f9ab63f"
+readonly T4L_RUNBOOK_SHA256="e39352e720ba09b9d9ce4ff434cd96441d2a26e3c739aedb127e80b837046a97"
 readonly T4L_INSTALL_ROOT="/opt/t4l"
 
 fail() {

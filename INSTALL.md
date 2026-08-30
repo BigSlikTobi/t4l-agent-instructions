@@ -28,8 +28,8 @@ Use these releases unchanged:
 
 - OpenClaw `>=2026.7.1-2` and `<2027.0.0`
 - `@t4l-trainer/openclaw-t4l-connect@0.4.0`
-- `t4l-agent==0.3.2`
-- `t4l-server==0.8.1`
+- `t4l-agent==0.4.0`
+- `t4l-server==0.9.0`
 - Python 3.11 or newer
 
 Never patch an installed package or install from a branch.
@@ -71,7 +71,7 @@ just discovered. The user does not run this command.
 
 ```bash
 curl -fsSL --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/BigSlikTobi/t4l-agent/v0.3.2/install.sh \
+  https://raw.githubusercontent.com/BigSlikTobi/t4l-agent/v0.4.0/install.sh \
   | bash -s -- \
       --public-url https://coach.example.com \
       --connector-owner-id channel:account:sender
