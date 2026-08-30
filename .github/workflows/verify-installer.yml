@@ -1,0 +1,44 @@
+name: Verify installer
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify shell and pinned downloads
+        run: |
+          set -euo pipefail
+          bash -n install.sh
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$temp_dir"' EXIT
+          core_url="$(sed -n 's/^readonly T4L_CORE_INSTALLER_URL="\([^"]*\)"/\1/p' install.sh)"
+          core_sha="$(sed -n 's/^readonly T4L_CORE_INSTALLER_SHA256="\([^"]*\)"/\1/p' install.sh)"
+          runbook_sha="$(sed -n 's/^readonly T4L_RUNBOOK_SHA256="\([^"]*\)"/\1/p' install.sh)"
+          curl -fsSL --proto '=https' --tlsv1.2 "$core_url" -o "$temp_dir/core-install.sh"
+          printf '%s  %s\n' "$core_sha" "$temp_dir/core-install.sh" | sha256sum -c -
+          printf '%s  %s\n' "$runbook_sha" INSTALL.md | sha256sum -c -
+      - name: Run zero-argument Linux bootstrap
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          bash install.sh >installer-output.txt
+          grep -F 'T4L_HOST_AGENT_CONTINUE_V1' installer-output.txt
+          /opt/t4l/venv/bin/python - <<'PY'
+          from importlib.metadata import version
+
+          assert version("t4l-agent") == "0.4.0"
+          assert version("t4l-server") == "0.9.0"
+          print("clean Linux bootstrap verified")
+          PY
